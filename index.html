@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Shoes Away!</title>
+    <title>신발 던지기: Wide View</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
@@ -12,7 +12,7 @@
             touch-action: none; 
             user-select: none; -webkit-user-select: none; 
             -webkit-touch-callout: none;
-            height: 100%; width: 100%;
+            height: 100%; width: 100%; position: fixed;
         }
         
         #ui { position: absolute; top: 15px; left: 15px; z-index: 20; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; display: none; font-size: 15px; font-weight: bold; width: 200px; }
@@ -60,7 +60,7 @@
 <div id="ready-sign">READY! (꾹 누르세요)</div>
 
 <div id="selection-screen">
-    <h2 style="margin-bottom: 20px;">👟 신발 던지기</h2>
+    <h2 style="margin-bottom: 20px;">👟 신발 던지기 (와이드 뷰)</h2>
     <div class="shoe-option" onclick="selectShoe('sneakers')"><strong>👟 운동화</strong><br><span style="font-size:12px; color:#aaa;">내구도: 500</span></div>
     <div class="shoe-option" onclick="selectShoe('slipper')"><strong>🩴 슬리퍼</strong><br><span style="font-size:12px; color:#aaa;">내구도: 250</span></div>
     <div class="shoe-option" onclick="selectShoe('leather')"><strong>👞 정장 구두</strong><br><span style="font-size:12px; color:#aaa;">내구도: 1000</span></div>
@@ -218,7 +218,6 @@
         return 'grass';
     }
 
-    // 안전한 땅 찾기 (Gap이 아닌 곳으로 후퇴)
     function findSafeRespawnPoint(startX) {
         let safeX = startX - 200; 
         while (safeX > 0) {
@@ -237,17 +236,22 @@
     }
 
     function update() {
-        // [핵심] 리셋 중이면 모든 물리 연산 중지 (중복 데미지 방지)
         if(state.resetting) return;
 
         let groundH = getPhysicsGroundHeight(shoe.x);
         let visualGroundH = (groundH > 10000) ? GROUND_BASELINE : groundH;
 
         let dist = Math.abs(shoe.y - visualGroundH);
-        let requiredHeight = dist + 600;
+        
+        // [줌 아웃 수정] 기본 뷰를 훨씬 넓게 잡음 (900 -> 1100)
+        let requiredHeight = dist + 1100; 
         let calculatedZoom = canvas.height / requiredHeight;
         
-        let targetZoom = Math.min(1.0, Math.max(0.35, calculatedZoom));
+        // [모바일 대응] 최소 줌 레벨을 더 낮춰서(0.25) 넓은 시야 확보
+        // 최대 줌도 0.85로 제한하여 너무 답답하게 붙지 않도록 함
+        let minZoom = window.innerWidth < 600 ? 0.25 : 0.3;
+        let targetZoom = Math.min(0.85, Math.max(minZoom, calculatedZoom));
+        
         let targetCamY;
 
         if(shoe.y > GROUND_BASELINE + 100) {
@@ -262,7 +266,9 @@
 
         camera.targetZoom = targetZoom;
         camera.zoom += (camera.targetZoom - camera.zoom) * 0.005;
-        let targetCamX = shoe.x - (canvas.width * 0.3) / camera.zoom;
+        
+        // [시야 확보] 신발을 왼쪽 20% 지점에 둬서 오른쪽(앞)을 더 많이 보여줌
+        let targetCamX = shoe.x - (canvas.width * 0.2) / camera.zoom;
 
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
@@ -317,18 +323,14 @@
             else ui.height.innerText = Math.max(0, currentAlt);
             ui.terrain.innerText = "지형: " + (terrainType==='gap'?"☠️ 절벽":(terrainType==='rock'?"🪨 공사장":"🛣️ 도로"));
 
-            // [충돌 우선순위 수정]
-            // 1. 벽 충돌 (튕겨나감)
             if (terrainType !== 'gap' && shoe.y > groundH + 20) {
                 shoe.vx = -shoe.vx * 0.6; 
                 shoe.x += shoe.vx * 2; 
-                applyDamage(5); // 벽 충돌 소량 데미지
+                applyDamage(5);
             }
-            // 2. 정상 착지
             else if (shoe.y >= groundH - 10 && terrainType !== 'gap') {
                 handleCollision(groundH, terrainType);
             } 
-            // 3. 추락 (2000px)
             else if (shoe.y > GROUND_BASELINE + 2000 && terrainType === 'gap') {
                 handlePitFall();
             }
@@ -354,7 +356,6 @@
     }
 
     function handlePitFall() {
-        // [중복 실행 방지] 이미 리셋 중이면 무시
         if(state.resetting) return;
         state.resetting = true; 
         
@@ -362,21 +363,25 @@
         state.charging = false; 
         physics.power = 0;
         gauge.style.width = "0%";
-        shoe.vx = 0; shoe.vy = 0; // 즉시 정지
+        shoe.vx = 0; shoe.vy = 0;
         
-        // 딱 50 데미지 한 번만
-        applyDamage(50);
+        let damage = Math.floor(shoeData.maxDur * 0.1); 
+        
+        if (shoeData.curDur - damage <= 0 && shoeData.curDur > 1) {
+            shoeData.curDur = 1;
+            updateUI();
+            showPopup("😱 구사일생!\n체력 1 남음");
+        } else {
+            applyDamage(damage);
+            if (shoeData.curDur > 0) showPopup(`😱 절벽 추락!\n내구도 -${damage}`);
+        }
         
         if (shoeData.curDur > 0) {
-            showPopup("😱 으악! 떨어졌다!\n내구도 -50");
-            
-            // 안전한 곳 찾아서 복귀
             setTimeout(() => {
                 let safeX = findSafeRespawnPoint(shoe.lastSafeX);
                 shoe.x = safeX;
                 shoe.y = getPhysicsGroundHeight(safeX) - 100;
                 shoe.lastSafeX = safeX; 
-                
                 camera.x = shoe.x - canvas.width * 0.2;
                 camera.y = shoe.y - canvas.height * 0.5;
                 state.resetting = false;
