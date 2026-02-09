@@ -3,16 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Shoes Away!</title>
+    <title>신발 던지기: Mobile Touch Final</title>
     <style>
+        /* [핵심] 모바일 제스처, 선택, 롱탭 메뉴 원천 차단 */
         html, body { 
             margin: 0; padding: 0; background: #000; 
             font-family: 'Pretendard', sans-serif; 
-            overflow: hidden; 
-            touch-action: none; 
-            user-select: none; -webkit-user-select: none; 
-            -webkit-touch-callout: none;
-            height: 100%; width: 100%;
+            overflow: hidden; /* 스크롤바 숨김 */
+            touch-action: none; /* 브라우저 기본 터치 동작 무시 */
+            user-select: none; -webkit-user-select: none; /* 텍스트 선택 방지 */
+            -webkit-touch-callout: none; /* iOS 롱탭 메뉴 방지 */
+            -webkit-tap-highlight-color: transparent; /* 터치 하이라이트 제거 */
+            height: 100%; width: 100%; position: fixed; /* 화면 고정 */
         }
         
         #ui { position: absolute; top: 15px; left: 15px; z-index: 20; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; display: none; font-size: 15px; font-weight: bold; width: 200px; }
@@ -60,7 +62,7 @@
 <div id="ready-sign">READY! (꾹 누르세요)</div>
 
 <div id="selection-screen">
-    <h2 style="margin-bottom: 20px;">👟 SHOES AWAY!</h2>
+    <h2 style="margin-bottom: 20px;">👟 신발 던지기 (모바일 터치 Fix)</h2>
     <div class="shoe-option" onclick="selectShoe('sneakers')"><strong>👟 운동화</strong><br><span style="font-size:12px; color:#aaa;">내구도: 500</span></div>
     <div class="shoe-option" onclick="selectShoe('slipper')"><strong>🩴 슬리퍼</strong><br><span style="font-size:12px; color:#aaa;">내구도: 250</span></div>
     <div class="shoe-option" onclick="selectShoe('leather')"><strong>👞 정장 구두</strong><br><span style="font-size:12px; color:#aaa;">내구도: 1000</span></div>
@@ -118,6 +120,7 @@
     const GROUND_BASELINE = canvas.height * 0.8; 
     let isTouchActive = false;
 
+    // 우클릭 차단
     window.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); return false; };
 
     for(let i=0; i<200; i++) {
@@ -187,10 +190,9 @@
             let newY = prevY;
             let rand = Math.random();
             if (rand < 0.15) { type = 'gap'; width = 200 + Math.random() * 200; } 
-            else if (rand < 0.45) { newY = prevY - (Math.random() * 100 + 30); type = 'rock'; } // 변동폭 감소
-            else if (rand < 0.75) { newY = prevY + (Math.random() * 100 + 30); type = 'grass'; } // 변동폭 감소
+            else if (rand < 0.45) { newY = prevY - (Math.random() * 100 + 30); type = 'rock'; } 
+            else if (rand < 0.75) { newY = prevY + (Math.random() * 100 + 30); type = 'grass'; }
             
-            // 높이 제한 (Clamp)
             if (newY < canvas.height * 0.4) { newY = canvas.height * 0.4 + (Math.random() * 50); type = 'grass'; }
             if (newY > canvas.height * 0.9) { newY = canvas.height * 0.9 - (Math.random() * 50); }
 
@@ -357,20 +359,29 @@
     function handlePitFall() {
         if(state.resetting) return;
         state.resetting = true; 
-        
         state.flying = false;
         state.charging = false; 
         physics.power = 0;
         gauge.style.width = "0%";
         shoe.vx = 0; shoe.vy = 0;
         
-        applyDamage(50);
+        let damage = Math.floor(shoeData.maxDur * 0.1); // 10% damage
+        
+        if (shoeData.curDur - damage <= 0 && shoeData.curDur > 1) {
+            shoeData.curDur = 1;
+            showPopup("😱 구사일생!\n체력 1 남음");
+            updateUI();
+        } else {
+            applyDamage(damage);
+            if (shoeData.curDur > 0) showPopup(`😱 절벽 추락!\n내구도 -${damage}`);
+        }
         
         if (shoeData.curDur > 0) {
-            showPopup("😱 으악! 떨어졌다!\n내구도 -50");
             setTimeout(() => {
-                shoe.x = shoe.lastSafeX;
-                shoe.y = getPhysicsGroundHeight(shoe.lastSafeX) - 100;
+                let safeX = findSafeRespawnPoint(shoe.lastSafeX);
+                shoe.x = safeX;
+                shoe.y = getPhysicsGroundHeight(safeX) - 100;
+                shoe.lastSafeX = safeX; // 안전 위치 갱신
                 camera.x = shoe.x - canvas.width * 0.2;
                 camera.y = shoe.y - canvas.height * 0.5;
                 state.resetting = false;
@@ -475,56 +486,12 @@
         });
         ctx.restore();
 
-        // [렌더링 최적화] 화면에 보이는 영역 + 여유분만 그리기
         let viewStart = camera.x - (canvas.width * 1.5) / camera.zoom;
         let viewEnd = camera.x + (canvas.width * 1.5) / camera.zoom;
 
+        // 최적화된 지형 그리기
         ctx.beginPath();
         let started = false;
-
-        for(let i=0; i<terrainSegments.length; i++) {
-            let p1 = terrainSegments[i];
-            
-            // 화면 밖이면 건너뛰기 (Culling)
-            if (p1.x < viewStart && i < terrainSegments.length - 1 && terrainSegments[i+1].x < viewStart) continue;
-            if (p1.x > viewEnd) break;
-
-            if (!started) {
-                ctx.moveTo(p1.x, p1.y);
-                started = true;
-            }
-
-            if(i < terrainSegments.length - 1) {
-                let p2 = terrainSegments[i+1];
-                if(p1.type === 'gap') {
-                    ctx.lineTo(p1.x, canvas.height + 3000); 
-                    ctx.lineTo(p2.x, canvas.height + 3000);
-                    ctx.lineTo(p2.x, p2.y);
-                } else {
-                    ctx.lineTo(p2.x, p2.y);
-                }
-            }
-        }
-        
-        // 닫힌 도형 처리를 위해 마지막 점 처리
-        if (started) {
-             // 끝부분 처리 (필요시)
-        }
-
-        // 지형 색상 채우기 등... (최적화를 위해 stroke/fill을 나누지 않고 drawTerrain 함수로 통합 가능하지만
-        // 여기서는 기존 로직 유지하되 범위만 제한)
-        
-        // * 위 로직은 fill을 위해 닫힌 도형이 필요하므로, 기존 방식대로 하되 범위 제한을 적용
-        // 간단하게 stroke만 다시 그리는 방식으로 수정
-        
-        ctx.closePath(); // (채우기는 복잡하므로 여기선 간단히)
-        // [수정된 그리기 로직]
-        // fill을 제대로 하려면 화면 바닥까지 닫아야 함.
-        // 여기서는 stroke 위주로 최적화 보여줌.
-        
-        // 다시: fill을 위한 전체 경로 (최적화 버전)
-        ctx.beginPath();
-        started = false;
         let lastX = 0;
         
         for(let i=0; i<terrainSegments.length; i++) {
@@ -533,7 +500,7 @@
             if (p1.x > viewEnd) break;
 
             if (!started) {
-                ctx.moveTo(p1.x, canvas.height + 3000); // 바닥에서 시작
+                ctx.moveTo(p1.x, canvas.height + 3000);
                 ctx.lineTo(p1.x, p1.y);
                 started = true;
             }
@@ -550,12 +517,11 @@
                 lastX = p2.x;
             }
         }
-        ctx.lineTo(lastX, canvas.height + 3000); // 마지막 바닥 연결
+        ctx.lineTo(lastX, canvas.height + 3000);
         ctx.closePath();
         ctx.fillStyle = starAlpha > 0.5 ? "#263238" : "#546E7A"; 
         ctx.fill();
         
-        // 선 그리기 (Stroke)
         ctx.lineWidth = 4;
         for(let i=0; i<terrainSegments.length-1; i++) {
             let p1 = terrainSegments[i];
@@ -612,15 +578,25 @@
         ctx.restore();
     }
 
+    // -------------------------------------------------------------
+    // [입력 시스템 수정] 모바일 터치 및 중복 방지
+    // -------------------------------------------------------------
+
     function startCharge(e) {
-        if(e.cancelable) e.preventDefault(); 
+        // 버튼을 눌렀다면 게임 충전 동작 안 함
         if(e.target.className.includes('shoe-option')) return;
+
+        // 브라우저 기본 동작 차단 (스크롤/확대)
+        if(e.cancelable) e.preventDefault();
+        
         if(!state.started || state.flying || state.resetting) return;
+        
         state.charging = true;
     }
 
     function endCharge(e) {
         if(!state.started) return;
+        
         if(state.charging) {
             state.charging = false;
             let force = (physics.power * 0.4 + 12) / shoeData.weight;
@@ -635,27 +611,28 @@
         }
     }
 
-    document.addEventListener('mousedown', (e) => {
-        if(isTouchActive) return; 
+    // 마우스
+    window.addEventListener('mousedown', (e) => {
+        if(isTouchActive) return; // 터치 중이면 마우스 무시
         startCharge(e);
     });
-    
-    document.addEventListener('mouseup', (e) => {
+    window.addEventListener('mouseup', (e) => {
         if(isTouchActive) return;
         endCharge(e);
     });
 
-    document.addEventListener('touchstart', (e) => {
-        isTouchActive = true; 
+    // 터치 (passive: false 필수!)
+    window.addEventListener('touchstart', (e) => {
+        isTouchActive = true;
         startCharge(e);
-    }, {passive: false}); 
+    }, {passive: false});
 
-    document.addEventListener('touchend', (e) => {
+    window.addEventListener('touchend', (e) => {
         endCharge(e);
         setTimeout(() => isTouchActive = false, 500);
     });
     
-    document.addEventListener('touchcancel', (e) => {
+    window.addEventListener('touchcancel', (e) => {
         endCharge(e);
         isTouchActive = false;
     });
