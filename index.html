@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Final Stable</title>
+    <title>신발 던지기: Mobile Final</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
             font-family: 'Pretendard', sans-serif; 
             overflow: hidden; 
-            touch-action: none; 
+            touch-action: none; /* 브라우저 터치 동작 차단 */
             user-select: none; -webkit-user-select: none; 
             -webkit-touch-callout: none;
             height: 100%; width: 100%; position: fixed;
         }
         
-        /* UI: 반응형 폰트 및 배치 */
         #ui { 
             position: absolute; top: 15px; left: 50%; transform: translateX(-50%); 
             z-index: 20; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); 
@@ -41,7 +40,7 @@
         }
 
         #selection-screen { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; pointer-events: auto; }
-        .shoe-option { background: #333; border: 2px solid #fff; border-radius: 15px; padding: 15px; margin: 8px; width: 80%; max-width: 300px; text-align: center; cursor: pointer; transition: 0.1s; }
+        .shoe-option { background: #333; border: 2px solid #fff; border-radius: 15px; padding: 15px; margin: 8px; width: 80%; max-width: 300px; text-align: center; cursor: pointer; transition: 0.1s; -webkit-tap-highlight-color: transparent; }
         .shoe-option:active { transform: scale(0.95); background: #555; }
         
         #gauge-container { position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); width: 80%; height: 35px; background: rgba(0,0,0,0.5); border: 3px solid #fff; border-radius: 20px; display: none; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.5); pointer-events: none; z-index: 20; }
@@ -108,7 +107,7 @@
     const uiHeight = document.getElementById('height-val');
     const uiTerrain = document.getElementById('terrain-info');
 
-    // 화면 크기 초기화 (반응형)
+    // 화면 리사이즈 대응
     function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -116,7 +115,6 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // 상태 변수
     let state = { started: false, flying: false, charging: false, resetting: false };
     let physics = { power: 0, powerDir: 1, angle: -45, angleDir: 1, gravity: 0.25 };
     let shoe = { x: 100, y: 0, vx: 0, vy: 0, rotation: 0, startX: 100, lastSafeX: 100, lastSafeY: 0 };
@@ -129,12 +127,12 @@
     
     const PARALLAX_FACTOR = 0.2; 
     let GROUND_BASELINE = canvas.height * 0.8; 
+    
+    // [중요] 터치 상태 관리
     let isTouchActive = false;
 
-    // 우클릭 방지
     window.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); return false; };
 
-    // 배경 별 생성
     for(let i=0; i<200; i++) {
         bgStars.push({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, s: Math.random() * 2, blink: Math.random() });
     }
@@ -148,7 +146,6 @@
         shoeData.curDur = shoeData.maxDur;
         GROUND_BASELINE = canvas.height * 0.8;
         
-        // 데이터 초기화
         terrainSegments = [];
         buildings = [];
         generateTerrain(0, 2000);
@@ -211,7 +208,6 @@
             else if (rand < 0.45) { newY = prevY - (Math.random() * 100 + 30); type = 'rock'; } 
             else if (rand < 0.75) { newY = prevY + (Math.random() * 100 + 30); type = 'grass'; }
             
-            // 높이 제한 (화면 비율 기준)
             if (newY < canvas.height * 0.4) { newY = canvas.height * 0.4 + (Math.random() * 50); type = 'grass'; }
             if (newY > canvas.height * 0.9) { newY = canvas.height * 0.9 - (Math.random() * 50); }
 
@@ -265,9 +261,8 @@
 
         let dist = Math.abs(shoe.y - visualGroundH);
         
-        // 반응형 줌 레벨 계산
         let baseViewWidth = 1100; 
-        if (canvas.height > canvas.width) baseViewWidth = 1600; // 세로 모드 대응
+        if (canvas.height > canvas.width) baseViewWidth = 1600;
 
         let requiredHeight = dist + baseViewWidth * (canvas.height / canvas.width) * 0.5; 
         let calculatedZoom = canvas.height / requiredHeight;
@@ -293,11 +288,9 @@
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
 
-        // 최적화: 지나간 지형 삭제
         if (terrainSegments.length > 0 && terrainSegments[0].x < camera.x - 3000) terrainSegments.shift();
         if(buildings.length > 0 && buildings[0].x + buildings[0].w < camera.x * PARALLAX_FACTOR - 1000) buildings.shift();
 
-        // 지형 생성
         if(terrainSegments.length > 0 && shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
             generateTerrain(terrainSegments[terrainSegments.length-1].x, shoe.x + 4000);
         }
@@ -328,12 +321,10 @@
             shoe.y += shoe.vy;
             shoe.rotation += shoe.vx * 0.1;
 
-            // 바닥 충돌 보정 (미끄러짐 방지)
             if(Math.abs(shoe.vx) < 0.1 && Math.abs(shoe.vy) < 0.1 && groundH < 10000 && shoe.y >= groundH - 12) {
                 shoe.vx = 0; shoe.vy = 0; 
                 shoe.y = groundH - 4; 
                 shoe.rotation = 0;
-                
                 state.flying = false;
                 state.charging = false; 
                 shoe.lastSafeX = shoe.x; 
@@ -348,14 +339,13 @@
             else uiHeight.innerText = Math.max(0, currentAlt);
             uiTerrain.innerText = (terrainType==='gap'?"절벽":(terrainType==='rock'?"공사장":"도로"));
 
-            // 물리 충돌
-            if (terrainType !== 'gap' && shoe.y > groundH + 20) { // 벽
+            if (terrainType !== 'gap' && shoe.y > groundH + 20) { 
                 shoe.vx = -shoe.vx * 0.6; 
                 shoe.x += shoe.vx * 2; 
                 applyDamage(5);
-            } else if (shoe.y >= groundH - 10 && terrainType !== 'gap') { // 착지
+            } else if (shoe.y >= groundH - 10 && terrainType !== 'gap') { 
                 handleCollision(groundH, terrainType);
-            } else if (shoe.y > GROUND_BASELINE + 2000 && terrainType === 'gap') { // 추락
+            } else if (shoe.y > GROUND_BASELINE + 2000 && terrainType === 'gap') { 
                 handlePitFall();
             }
         }
@@ -502,38 +492,61 @@
         });
         ctx.restore();
 
-        // 렌더링 최적화: 보이는 영역만 그리기 + 안정적인 방식
         let viewStart = camera.x - (canvas.width * 1.5) / camera.zoom;
         let viewEnd = camera.x + (canvas.width * 1.5) / camera.zoom;
 
         ctx.fillStyle = starAlpha > 0.5 ? "#263238" : "#546E7A";
-        ctx.strokeStyle = starAlpha > 0.5 ? "#102027" : "#37474F";
-        ctx.lineWidth = 4;
+        
+        let isDrawing = false;
+        let polyStartX = 0;
 
-        // 단순화된 렌더링: 각 세그먼트를 개별적으로 그림 (안전성 확보)
         for(let i=0; i<terrainSegments.length-1; i++) {
             let p1 = terrainSegments[i];
             let p2 = terrainSegments[i+1];
 
-            // 화면 밖 무시
             if (p2.x < viewStart) continue;
             if (p1.x > viewEnd) break;
 
-            if(p1.type !== 'gap') {
-                ctx.beginPath();
-                ctx.moveTo(p1.x, canvas.height + 3000); // 바닥
-                ctx.lineTo(p1.x, p1.y); // 위로
-                ctx.lineTo(p2.x, p2.y); // 오른쪽으로
-                ctx.lineTo(p2.x, canvas.height + 3000); // 바닥으로
-                ctx.fill();
-                
-                // 외곽선은 윗부분만
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y); 
+            if (p1.type === 'gap') {
+                if (isDrawing) {
+                    ctx.lineTo(p1.x, canvas.height + 3000); 
+                    ctx.lineTo(polyStartX, canvas.height + 3000);
+                    ctx.closePath();
+                    ctx.fill();
+                    isDrawing = false;
+                }
+            } else {
+                if (!isDrawing) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, canvas.height + 3000);
+                    ctx.lineTo(p1.x, p1.y);
+                    polyStartX = p1.x;
+                    isDrawing = true;
+                }
                 ctx.lineTo(p2.x, p2.y);
-                ctx.stroke();
             }
         }
+        if (isDrawing) {
+            let lastP = terrainSegments[terrainSegments.length-1];
+            ctx.lineTo(lastP.x, canvas.height + 3000);
+            ctx.lineTo(polyStartX, canvas.height + 3000);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        ctx.beginPath();
+        for(let i=0; i<terrainSegments.length-1; i++) {
+            let p1 = terrainSegments[i];
+            let p2 = terrainSegments[i+1];
+            if (p2.x < viewStart) continue;
+            if (p1.x > viewEnd) break;
+            if(p1.type !== 'gap') {
+                ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+            }
+        }
+        ctx.strokeStyle = starAlpha > 0.5 ? "#102027" : "#37474F";
+        ctx.lineWidth = 4;
+        ctx.stroke();
 
         if(!state.resetting) {
             ctx.save();
@@ -576,14 +589,20 @@
         ctx.restore();
     }
 
+    // [모바일 터치 이벤트 핸들링]
     function startCharge(e) {
-        if(e.target.className.includes('shoe-option')) return;
+        // 버튼 클릭은 허용 (선택 화면)
+        if(e.target.closest('.shoe-option')) return;
+        
+        // 그 외 영역 터치는 게임 조작으로 간주하고 브라우저 기본 동작(스크롤 등) 막음
         if(e.cancelable) e.preventDefault();
+        
         if(!state.started || state.flying || state.resetting) return;
         state.charging = true;
     }
 
     function endCharge(e) {
+        if(e.cancelable) e.preventDefault();
         if(!state.started) return;
         if(state.charging) {
             state.charging = false;
@@ -593,12 +612,13 @@
             shoe.vy = Math.sin(rad) * force;
             physics.power = 0;
             gauge.style.width = "0%";
-            gaugeText.innerText = "화면 꾹 눌러서 던지기!";
+            gaugeText.innerText = "꾹 눌러서 던지기!";
             ui.terrain.innerText = "비행중...";
             state.flying = true;
         }
     }
 
+    // 마우스 이벤트
     window.addEventListener('mousedown', (e) => {
         if(isTouchActive) return; 
         startCharge(e);
@@ -608,6 +628,7 @@
         endCharge(e);
     });
 
+    // 터치 이벤트 (Passive: false 필수)
     window.addEventListener('touchstart', (e) => {
         isTouchActive = true;
         startCharge(e);
@@ -616,8 +637,13 @@
     window.addEventListener('touchend', (e) => {
         endCharge(e);
         setTimeout(() => isTouchActive = false, 500);
-    });
+    }, {passive: false});
     
+    // 터치 중 이동 시 스크롤 방지
+    window.addEventListener('touchmove', (e) => {
+        if(e.cancelable) e.preventDefault();
+    }, {passive: false});
+
     window.addEventListener('touchcancel', (e) => {
         endCharge(e);
         isTouchActive = false;
