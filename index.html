@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Forward Rescue</title>
+    <title>신발 던지기: Anti-Slide</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
@@ -233,21 +233,17 @@
         return 'grass';
     }
 
-    // [New] 전방 안전지대 검색 (바로 앞 지형으로 구조)
+    // 전방 안전지대 검색
     function findForwardSafeRespawnPoint(startX) {
-        // 배열 처음부터 끝까지 훑되, 내 위치(startX)보다 앞에 있는 첫 번째 땅을 찾음
         for (let i = 0; i < terrainSegments.length; i++) {
             let seg = terrainSegments[i];
             if (seg.x > startX && seg.type !== 'gap') {
-                return seg.x + 50; // 찾은 땅의 앞부분에 착지
+                return seg.x + 50; 
             }
         }
-        
-        // 만약 앞쪽 땅이 생성 안 됐으면(거의 없겠지만), 그냥 뒤쪽 검색으로 대체
         return findSafeRespawnPointBack(startX);
     }
 
-    // (혹시 몰라 남겨두는) 후방 검색 (Fallback용)
     function findSafeRespawnPointBack(startX) {
         let safeX = startX - 200; 
         while (safeX > 0) {
@@ -299,7 +295,6 @@
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
 
-        // 지형 생성 (계속)
         if(terrainSegments.length > 0 && shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
             generateTerrain(terrainSegments[terrainSegments.length-1].x, shoe.x + 4000);
         }
@@ -336,7 +331,7 @@
                 shoe.rotation = 0;
                 state.flying = false;
                 state.charging = false; 
-                // 안전지대 저장 로직은 제거 (이제 떨어질 때 실시간으로 앞을 찾음)
+                shoe.lastSafeX = shoe.x; 
                 shoe.startX = shoe.x;
             }
 
@@ -349,9 +344,15 @@
             uiTerrain.innerText = (terrainType==='gap'?"절벽":(terrainType==='rock'?"공사장":"도로"));
 
             if (terrainType !== 'gap' && shoe.y > groundH + 20) { 
-                shoe.vx = -shoe.vx * 0.6; 
-                shoe.x += shoe.vx * 2; 
-                if(Math.abs(shoe.vx) > 2) applyDamage(5); 
+                // [핵심 변경] 벽에 깊게 박히면(50px 이상), 튕기는 게 아니라 즉시 추락(구조) 처리
+                if (shoe.y > groundH + 50) {
+                    handlePitFall(); // 미끄러짐 방지 -> 즉시 구조
+                } else {
+                    // 살짝 부딪힌 건 튕겨냄
+                    shoe.vx = -shoe.vx * 0.6; 
+                    shoe.x += shoe.vx * 2; 
+                    if(Math.abs(shoe.vx) > 2) applyDamage(5); 
+                }
             } else if (shoe.y >= groundH - 10 && terrainType !== 'gap') { 
                 handleCollision(groundH, terrainType);
             } else if (shoe.y > GROUND_BASELINE + 2000 && terrainType === 'gap') { 
@@ -373,6 +374,7 @@
         if(type === 'rock') impactDmg = 20; 
         applyDamage(impactDmg);
 
+        shoe.lastSafeX = shoe.x;
         shoe.startX = shoe.x;
     }
 
@@ -391,8 +393,7 @@
         if (shoeData.curDur > 0) {
             showPopup(`😱 전방으로 구조 중...\n내구도 -50`);
             
-            // [핵심 변경] 현재 위치보다 '앞쪽(Forward)'에 있는 안전지대 검색
-            let safeX = findForwardSafeRespawnPoint(shoe.x);
+            let safeX = findForwardSafeRespawnPoint(shoe.x); // 전방 검색
             
             setTimeout(() => {
                 shoe.x = safeX;
