@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Mobile Touch Final</title>
+    <title>Shoes Away!</title>
     <style>
-        /* [핵심] 모바일 제스처, 선택, 롱탭 메뉴 원천 차단 */
         html, body { 
             margin: 0; padding: 0; background: #000; 
             font-family: 'Pretendard', sans-serif; 
-            overflow: hidden; /* 스크롤바 숨김 */
-            touch-action: none; /* 브라우저 기본 터치 동작 무시 */
-            user-select: none; -webkit-user-select: none; /* 텍스트 선택 방지 */
-            -webkit-touch-callout: none; /* iOS 롱탭 메뉴 방지 */
-            -webkit-tap-highlight-color: transparent; /* 터치 하이라이트 제거 */
-            height: 100%; width: 100%; position: fixed; /* 화면 고정 */
+            overflow: hidden; 
+            touch-action: none; 
+            user-select: none; -webkit-user-select: none; 
+            -webkit-touch-callout: none;
+            height: 100%; width: 100%;
         }
         
         #ui { position: absolute; top: 15px; left: 15px; z-index: 20; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; display: none; font-size: 15px; font-weight: bold; width: 200px; }
@@ -62,7 +60,7 @@
 <div id="ready-sign">READY! (꾹 누르세요)</div>
 
 <div id="selection-screen">
-    <h2 style="margin-bottom: 20px;">👟 신발 던지기 (모바일 터치 Fix)</h2>
+    <h2 style="margin-bottom: 20px;">👟 신발 던지기</h2>
     <div class="shoe-option" onclick="selectShoe('sneakers')"><strong>👟 운동화</strong><br><span style="font-size:12px; color:#aaa;">내구도: 500</span></div>
     <div class="shoe-option" onclick="selectShoe('slipper')"><strong>🩴 슬리퍼</strong><br><span style="font-size:12px; color:#aaa;">내구도: 250</span></div>
     <div class="shoe-option" onclick="selectShoe('leather')"><strong>👞 정장 구두</strong><br><span style="font-size:12px; color:#aaa;">내구도: 1000</span></div>
@@ -120,7 +118,6 @@
     const GROUND_BASELINE = canvas.height * 0.8; 
     let isTouchActive = false;
 
-    // 우클릭 차단
     window.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); return false; };
 
     for(let i=0; i<200; i++) {
@@ -139,7 +136,7 @@
         generateBuildings(-1000, window.innerWidth * 2);
 
         shoe.y = GROUND_BASELINE - 20;
-        shoe.lastSafeY = shoe.y;
+        shoe.lastSafeX = shoe.x; 
 
         document.getElementById('selection-screen').style.display = 'none';
         document.getElementById('ui').style.display = 'block';
@@ -221,18 +218,13 @@
         return 'grass';
     }
 
-    function findSafeRespawnPoint(x) {
-        let currentIndex = 0;
-        for(let i=0; i<terrainSegments.length-1; i++) {
-            if(x >= terrainSegments[i].x && x < terrainSegments[i+1].x) {
-                currentIndex = i;
-                break;
-            }
-        }
-        for(let i = currentIndex; i >= 0; i--) {
-            if(terrainSegments[i].type !== 'gap') {
-                return terrainSegments[i].x + 100;
-            }
+    // 안전한 땅 찾기 (Gap이 아닌 곳으로 후퇴)
+    function findSafeRespawnPoint(startX) {
+        let safeX = startX - 200; 
+        while (safeX > 0) {
+            let type = getTerrainType(safeX);
+            if (type !== 'gap') return safeX;
+            safeX -= 200;
         }
         return 100; 
     }
@@ -245,6 +237,7 @@
     }
 
     function update() {
+        // [핵심] 리셋 중이면 모든 물리 연산 중지 (중복 데미지 방지)
         if(state.resetting) return;
 
         let groundH = getPhysicsGroundHeight(shoe.x);
@@ -312,7 +305,8 @@
                 
                 state.flying = false;
                 state.charging = false; 
-                shoe.lastSafeX = shoe.x; shoe.lastSafeY = shoe.y; shoe.startX = shoe.x;
+                shoe.lastSafeX = shoe.x; // 안전 위치 저장
+                shoe.startX = shoe.x;
             }
 
             let terrainType = getTerrainType(shoe.x);
@@ -323,14 +317,18 @@
             else ui.height.innerText = Math.max(0, currentAlt);
             ui.terrain.innerText = "지형: " + (terrainType==='gap'?"☠️ 절벽":(terrainType==='rock'?"🪨 공사장":"🛣️ 도로"));
 
+            // [충돌 우선순위 수정]
+            // 1. 벽 충돌 (튕겨나감)
             if (terrainType !== 'gap' && shoe.y > groundH + 20) {
                 shoe.vx = -shoe.vx * 0.6; 
                 shoe.x += shoe.vx * 2; 
-                applyDamage(5);
+                applyDamage(5); // 벽 충돌 소량 데미지
             }
+            // 2. 정상 착지
             else if (shoe.y >= groundH - 10 && terrainType !== 'gap') {
                 handleCollision(groundH, terrainType);
             } 
+            // 3. 추락 (2000px)
             else if (shoe.y > GROUND_BASELINE + 2000 && terrainType === 'gap') {
                 handlePitFall();
             }
@@ -352,36 +350,33 @@
         applyDamage(impactDmg);
 
         shoe.lastSafeX = shoe.x;
-        shoe.lastSafeY = shoe.y;
         shoe.startX = shoe.x;
     }
 
     function handlePitFall() {
+        // [중복 실행 방지] 이미 리셋 중이면 무시
         if(state.resetting) return;
         state.resetting = true; 
+        
         state.flying = false;
         state.charging = false; 
         physics.power = 0;
         gauge.style.width = "0%";
-        shoe.vx = 0; shoe.vy = 0;
+        shoe.vx = 0; shoe.vy = 0; // 즉시 정지
         
-        let damage = Math.floor(shoeData.maxDur * 0.1); // 10% damage
-        
-        if (shoeData.curDur - damage <= 0 && shoeData.curDur > 1) {
-            shoeData.curDur = 1;
-            showPopup("😱 구사일생!\n체력 1 남음");
-            updateUI();
-        } else {
-            applyDamage(damage);
-            if (shoeData.curDur > 0) showPopup(`😱 절벽 추락!\n내구도 -${damage}`);
-        }
+        // 딱 50 데미지 한 번만
+        applyDamage(50);
         
         if (shoeData.curDur > 0) {
+            showPopup("😱 으악! 떨어졌다!\n내구도 -50");
+            
+            // 안전한 곳 찾아서 복귀
             setTimeout(() => {
                 let safeX = findSafeRespawnPoint(shoe.lastSafeX);
                 shoe.x = safeX;
                 shoe.y = getPhysicsGroundHeight(safeX) - 100;
-                shoe.lastSafeX = safeX; // 안전 위치 갱신
+                shoe.lastSafeX = safeX; 
+                
                 camera.x = shoe.x - canvas.width * 0.2;
                 camera.y = shoe.y - canvas.height * 0.5;
                 state.resetting = false;
@@ -489,7 +484,6 @@
         let viewStart = camera.x - (canvas.width * 1.5) / camera.zoom;
         let viewEnd = camera.x + (canvas.width * 1.5) / camera.zoom;
 
-        // 최적화된 지형 그리기
         ctx.beginPath();
         let started = false;
         let lastX = 0;
@@ -578,25 +572,15 @@
         ctx.restore();
     }
 
-    // -------------------------------------------------------------
-    // [입력 시스템 수정] 모바일 터치 및 중복 방지
-    // -------------------------------------------------------------
-
     function startCharge(e) {
-        // 버튼을 눌렀다면 게임 충전 동작 안 함
         if(e.target.className.includes('shoe-option')) return;
-
-        // 브라우저 기본 동작 차단 (스크롤/확대)
         if(e.cancelable) e.preventDefault();
-        
         if(!state.started || state.flying || state.resetting) return;
-        
         state.charging = true;
     }
 
     function endCharge(e) {
         if(!state.started) return;
-        
         if(state.charging) {
             state.charging = false;
             let force = (physics.power * 0.4 + 12) / shoeData.weight;
@@ -611,9 +595,8 @@
         }
     }
 
-    // 마우스
     window.addEventListener('mousedown', (e) => {
-        if(isTouchActive) return; // 터치 중이면 마우스 무시
+        if(isTouchActive) return; 
         startCharge(e);
     });
     window.addEventListener('mouseup', (e) => {
@@ -621,7 +604,6 @@
         endCharge(e);
     });
 
-    // 터치 (passive: false 필수!)
     window.addEventListener('touchstart', (e) => {
         isTouchActive = true;
         startCharge(e);
