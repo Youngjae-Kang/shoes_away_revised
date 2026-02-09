@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Pointer Fix</title>
+    <title>신발 던지기: Perfect Ver.</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
             font-family: 'Pretendard', sans-serif; 
             overflow: hidden; 
-            /* 모든 터치 동작(스크롤, 줌 등)을 CSS 레벨에서 차단 */
-            touch-action: none; 
+            touch-action: none; /* 터치 제스처 차단 */
             user-select: none; -webkit-user-select: none; 
             -webkit-touch-callout: none;
             height: 100%; width: 100%; position: fixed;
@@ -119,6 +118,9 @@
     let shoe = { x: 100, y: 0, vx: 0, vy: 0, rotation: 0, startX: 100, lastSafeX: 100, lastSafeY: 0 };
     let shoeData = { name: "", color: "", weight: 1, maxDur: 1000, curDur: 1000 };
     
+    // [중요] 데미지 쿨타임 변수 (무적 시간)
+    let lastHitTime = 0; 
+    
     let terrainSegments = [];
     let buildings = []; 
     let camera = { x: 0, y: 0, zoom: 1, targetZoom: 1 };
@@ -151,6 +153,7 @@
         shoe.y = GROUND_BASELINE - 20;
         shoe.lastSafeX = 100; 
         shoe.vx = 0; shoe.vy = 0;
+        lastHitTime = 0; // 쿨타임 초기화
 
         document.getElementById('selection-screen').style.display = 'none';
         ui.style.display = 'flex';
@@ -334,10 +337,12 @@
             else uiHeight.innerText = Math.max(0, currentAlt);
             uiTerrain.innerText = (terrainType==='gap'?"절벽":(terrainType==='rock'?"공사장":"도로"));
 
+            // [물리 충돌 & 데미지 로직]
             if (terrainType !== 'gap' && shoe.y > groundH + 20) { 
+                // 벽 충돌: 속도가 어느 정도 있을 때만 데미지
                 shoe.vx = -shoe.vx * 0.6; 
                 shoe.x += shoe.vx * 2; 
-                applyDamage(5);
+                if(Math.abs(shoe.vx) > 2) applyDamage(5); 
             } else if (shoe.y >= groundH - 10 && terrainType !== 'gap') { 
                 handleCollision(groundH, terrainType);
             } else if (shoe.y > GROUND_BASELINE + 2000 && terrainType === 'gap') { 
@@ -379,7 +384,8 @@
             updateUI();
             showPopup("😱 구사일생!\n체력 1 남음");
         } else {
-            applyDamage(damage);
+            // [중요] 추락은 무적 시간 무시하고 강제로 데미지 적용
+            applyDamage(damage, true);
             if (shoeData.curDur > 0) showPopup(`😱 절벽 추락!\n내구도 -${damage}`);
         }
         
@@ -397,10 +403,17 @@
         }
     }
 
-    function applyDamage(amount) {
+    // [핵심] 데미지 쿨타임 적용 함수 (다단 히트 방지)
+    function applyDamage(amount, force = false) {
+        // 강제 적용(force)이 아니고, 마지막 피격 후 1초가 안 지났으면 무시 (무적 시간)
+        if (!force && Date.now() - lastHitTime < 1000) return;
+        
+        lastHitTime = Date.now(); // 피격 시간 갱신
+        
         shoeData.curDur -= amount;
         if(shoeData.curDur < 0) shoeData.curDur = 0;
         updateUI();
+        
         if(shoeData.curDur <= 0) {
             showPopup(`💥 ${shoeData.name} 파손됨!\n\n🚩 최종 거리: ${Math.floor(shoe.x/10)}m`);
             state.resetting = true; 
@@ -584,34 +597,16 @@
         ctx.restore();
     }
 
-    // -------------------------------------------------------------
-    // [입력 시스템 전면 교체: Pointer Events]
-    // 마우스, 터치, 펜 입력을 하나로 통합하여 처리 (충돌 방지)
-    // -------------------------------------------------------------
-
     function handlePointerDown(e) {
-        // 1. 버튼 클릭은 허용 (선택 화면 UI 등)
         if (e.target.closest('.shoe-option')) return;
-
-        // 2. 그 외 영역은 게임 조작으로 간주 -> 브라우저 기본 동작(스크롤, 줌) 차단
         e.preventDefault();
-
-        // 3. 게임 상태 체크
         if (!state.started || state.flying || state.resetting) return;
-
-        // 4. 충전 시작
         state.charging = true;
-        
-        // 5. 포인터 캡처 (화면 밖으로 나가도 이벤트 놓치지 않게 함)
-        // e.target이 canvas가 아닐 수도 있으므로 canvas나 window 활용
-        if(e.target.setPointerCapture) {
-            e.target.setPointerCapture(e.pointerId);
-        }
+        if(e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
     }
 
     function handlePointerUp(e) {
         if (!state.started) return;
-
         if (state.charging) {
             state.charging = false;
             let force = (physics.power * 0.4 + 12) / shoeData.weight;
@@ -623,23 +618,15 @@
             gaugeText.innerText = "꾹 눌러서 던지기!";
             uiTerrain.innerText = "비행중...";
             state.flying = true;
-            
-            // 포인터 캡처 해제
-            if(e.target.releasePointerCapture) {
-                e.target.releasePointerCapture(e.pointerId);
-            }
+            if(e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId);
         }
     }
 
-    // [핵심] Pointer Events 리스너 등록
-    // window에 등록하여 어디를 누르든 반응하게 함
     window.addEventListener('pointerdown', handlePointerDown, { passive: false });
     window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp); // 터치 취소(전화 올 때 등)도 release로 처리
-    
-    // [추가] 터치 이동 시 스크롤 방지 (Pointer Move)
+    window.addEventListener('pointercancel', handlePointerUp);
     window.addEventListener('pointermove', (e) => {
-        if(state.charging) e.preventDefault(); // 충전 중엔 스크롤 절대 금지
+        if(state.charging) e.preventDefault();
     }, { passive: false });
 
 </script>
