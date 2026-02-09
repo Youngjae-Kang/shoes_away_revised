@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Perfect Ver.</title>
+    <title>신발 던지기: Perfect</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
             font-family: 'Pretendard', sans-serif; 
             overflow: hidden; 
-            touch-action: none; /* 터치 제스처 차단 */
+            touch-action: none; 
             user-select: none; -webkit-user-select: none; 
             -webkit-touch-callout: none;
             height: 100%; width: 100%; position: fixed;
@@ -118,9 +118,7 @@
     let shoe = { x: 100, y: 0, vx: 0, vy: 0, rotation: 0, startX: 100, lastSafeX: 100, lastSafeY: 0 };
     let shoeData = { name: "", color: "", weight: 1, maxDur: 1000, curDur: 1000 };
     
-    // [중요] 데미지 쿨타임 변수 (무적 시간)
     let lastHitTime = 0; 
-    
     let terrainSegments = [];
     let buildings = []; 
     let camera = { x: 0, y: 0, zoom: 1, targetZoom: 1 };
@@ -153,7 +151,7 @@
         shoe.y = GROUND_BASELINE - 20;
         shoe.lastSafeX = 100; 
         shoe.vx = 0; shoe.vy = 0;
-        lastHitTime = 0; // 쿨타임 초기화
+        lastHitTime = 0;
 
         document.getElementById('selection-screen').style.display = 'none';
         ui.style.display = 'flex';
@@ -235,14 +233,28 @@
         return 'grass';
     }
 
+    // [수정됨] 안전한 땅 찾기 (메모리 삭제된 경우 대응)
     function findSafeRespawnPoint(startX) {
+        // 1. 메모리에 남은 땅이 없으면 초기 위치로
+        if (terrainSegments.length === 0) return 100;
+
         let safeX = startX - 200; 
-        while (safeX > 0) {
+        
+        // 2. 만약 되돌아가려는 위치(safeX)가 이미 삭제된(shift된) 구역이라면?
+        // 현재 메모리에 존재하는 가장 첫 번째 땅(terrainSegments[0])으로 강제 이동
+        if (safeX < terrainSegments[0].x) {
+            return terrainSegments[0].x + 50; 
+        }
+
+        // 3. 정상적인 백트래킹 (현재 메모리 범위 내)
+        while (safeX > terrainSegments[0].x) {
             let type = getTerrainType(safeX);
             if (type !== 'gap') return safeX;
             safeX -= 200;
         }
-        return 100; 
+        
+        // 못 찾으면 그냥 맨 앞 땅으로
+        return terrainSegments[0].x + 50; 
     }
 
     function loop() {
@@ -286,7 +298,8 @@
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
 
-        if (terrainSegments.length > 0 && terrainSegments[0].x < camera.x - 3000) terrainSegments.shift();
+        // [최적화 범위 수정] 너무 빨리 지우지 않게 3000 -> 6000으로 늘림 (안전성 확보)
+        if (terrainSegments.length > 0 && terrainSegments[0].x < camera.x - 6000) terrainSegments.shift();
         if(buildings.length > 0 && buildings[0].x + buildings[0].w < camera.x * PARALLAX_FACTOR - 1000) buildings.shift();
 
         if(terrainSegments.length > 0 && shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
@@ -337,9 +350,7 @@
             else uiHeight.innerText = Math.max(0, currentAlt);
             uiTerrain.innerText = (terrainType==='gap'?"절벽":(terrainType==='rock'?"공사장":"도로"));
 
-            // [물리 충돌 & 데미지 로직]
             if (terrainType !== 'gap' && shoe.y > groundH + 20) { 
-                // 벽 충돌: 속도가 어느 정도 있을 때만 데미지
                 shoe.vx = -shoe.vx * 0.6; 
                 shoe.x += shoe.vx * 2; 
                 if(Math.abs(shoe.vx) > 2) applyDamage(5); 
@@ -378,18 +389,13 @@
         shoe.vx = 0; shoe.vy = 0;
         
         let damage = Math.floor(shoeData.maxDur * 0.1); 
-        
-        if (shoeData.curDur - damage <= 0 && shoeData.curDur > 1) {
-            shoeData.curDur = 1;
-            updateUI();
-            showPopup("😱 구사일생!\n체력 1 남음");
-        } else {
-            // [중요] 추락은 무적 시간 무시하고 강제로 데미지 적용
-            applyDamage(damage, true);
-            if (shoeData.curDur > 0) showPopup(`😱 절벽 추락!\n내구도 -${damage}`);
-        }
+        // 50 데미지 고정 적용
+        applyDamage(50, true);
         
         if (shoeData.curDur > 0) {
+            showPopup(`😱 절벽 추락!\n내구도 -50`);
+            
+            // 안전한 곳 찾아서 부활
             setTimeout(() => {
                 let safeX = findSafeRespawnPoint(shoe.lastSafeX);
                 shoe.x = safeX;
@@ -399,16 +405,14 @@
                 camera.y = shoe.y - canvas.height * 0.5;
                 state.resetting = false;
                 popup.style.display = 'none';
-            }, 1500);
+            }, 1000);
         }
     }
 
-    // [핵심] 데미지 쿨타임 적용 함수 (다단 히트 방지)
     function applyDamage(amount, force = false) {
-        // 강제 적용(force)이 아니고, 마지막 피격 후 1초가 안 지났으면 무시 (무적 시간)
         if (!force && Date.now() - lastHitTime < 1000) return;
         
-        lastHitTime = Date.now(); // 피격 시간 갱신
+        lastHitTime = Date.now();
         
         shoeData.curDur -= amount;
         if(shoeData.curDur < 0) shoeData.curDur = 0;
