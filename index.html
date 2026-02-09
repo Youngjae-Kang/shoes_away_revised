@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Perfect</title>
+    <title>신발 던지기: Safe & Stable</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
@@ -233,28 +233,18 @@
         return 'grass';
     }
 
-    // [수정됨] 안전한 땅 찾기 (메모리 삭제된 경우 대응)
+    // [최종 수정] 뒤로 가며 안전한 땅 찾기
     function findSafeRespawnPoint(startX) {
-        // 1. 메모리에 남은 땅이 없으면 초기 위치로
-        if (terrainSegments.length === 0) return 100;
-
         let safeX = startX - 200; 
         
-        // 2. 만약 되돌아가려는 위치(safeX)가 이미 삭제된(shift된) 구역이라면?
-        // 현재 메모리에 존재하는 가장 첫 번째 땅(terrainSegments[0])으로 강제 이동
-        if (safeX < terrainSegments[0].x) {
-            return terrainSegments[0].x + 50; 
-        }
-
-        // 3. 정상적인 백트래킹 (현재 메모리 범위 내)
-        while (safeX > terrainSegments[0].x) {
+        // 메모리 삭제 기능을 껐으므로, 이제 무조건 처음 시작점(0)까지 검색 가능
+        while (safeX > 0) {
             let type = getTerrainType(safeX);
+            // Gap이 아니면 안전한 땅으로 간주
             if (type !== 'gap') return safeX;
-            safeX -= 200;
+            safeX -= 200; // 계속 뒤로 이동
         }
-        
-        // 못 찾으면 그냥 맨 앞 땅으로
-        return terrainSegments[0].x + 50; 
+        return 100; // 정 못 찾으면 시작 지점
     }
 
     function loop() {
@@ -298,10 +288,8 @@
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
 
-        // [최적화 범위 수정] 너무 빨리 지우지 않게 3000 -> 6000으로 늘림 (안전성 확보)
-        if (terrainSegments.length > 0 && terrainSegments[0].x < camera.x - 6000) terrainSegments.shift();
-        if(buildings.length > 0 && buildings[0].x + buildings[0].w < camera.x * PARALLAX_FACTOR - 1000) buildings.shift();
-
+        // [중요] 메모리 정리(Shift) 기능 삭제! 이제 땅이 절대 사라지지 않음
+        
         if(terrainSegments.length > 0 && shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
             generateTerrain(terrainSegments[terrainSegments.length-1].x, shoe.x + 4000);
         }
@@ -389,13 +377,11 @@
         shoe.vx = 0; shoe.vy = 0;
         
         let damage = Math.floor(shoeData.maxDur * 0.1); 
-        // 50 데미지 고정 적용
-        applyDamage(50, true);
+        applyDamage(50, true); // 데미지 50 고정
         
         if (shoeData.curDur > 0) {
             showPopup(`😱 절벽 추락!\n내구도 -50`);
             
-            // 안전한 곳 찾아서 부활
             setTimeout(() => {
                 let safeX = findSafeRespawnPoint(shoe.lastSafeX);
                 shoe.x = safeX;
