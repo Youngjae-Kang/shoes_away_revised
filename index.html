@@ -3,58 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Infinite City</title>
+    <title>Shoes Away!</title>
     <style>
-        body { margin: 0; padding: 0; background: #000; font-family: 'Pretendard', sans-serif; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+        html, body { 
+            margin: 0; padding: 0; background: #000; 
+            font-family: 'Pretendard', sans-serif; 
+            overflow: hidden; 
+            touch-action: none; 
+            user-select: none; -webkit-user-select: none; 
+            -webkit-touch-callout: none;
+            height: 100%; width: 100%;
+        }
         
-        #ui { position: absolute; top: 15px; left: 15px; z-index: 10; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; display: none; font-size: 15px; font-weight: bold; }
+        #ui { position: absolute; top: 15px; left: 15px; z-index: 20; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; display: none; font-size: 15px; font-weight: bold; width: 200px; }
         
-        #selection-screen { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; }
+        #hp-container {
+            width: 100%; height: 20px; background: #333; border: 2px solid #fff;
+            border-radius: 10px; margin-top: 5px; overflow: hidden; position: relative;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        #hp-fill {
+            height: 100%; width: 100%;
+            background: linear-gradient(to right, #4caf50, #81c784);
+            transition: width 0.2s ease-out, background 0.3s;
+        }
+        #hp-text {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; text-shadow: 1px 1px 2px #000; z-index: 2;
+        }
+
+        #selection-screen { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; pointer-events: auto; }
         .shoe-option { background: #333; border: 2px solid #fff; border-radius: 15px; padding: 15px; margin: 8px; width: 80%; max-width: 300px; text-align: center; cursor: pointer; transition: 0.1s; }
         .shoe-option:active { transform: scale(0.95); background: #555; }
         
-        #gauge-container { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); width: 70%; height: 30px; background: rgba(0,0,0,0.5); border: 3px solid #fff; border-radius: 20px; display: none; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.5); pointer-events: none; }
+        #gauge-container { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); width: 70%; height: 30px; background: rgba(0,0,0,0.5); border: 3px solid #fff; border-radius: 20px; display: none; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.5); pointer-events: none; z-index: 20; }
         #gauge { width: 0%; height: 100%; background: linear-gradient(to right, #4caf50, #ffeb3b, #f44336); transition: width 0.05s linear; }
-        #gauge-text { position: absolute; width: 100%; text-align: center; color: white; line-height: 30px; font-weight: bold; text-shadow: 1px 1px 2px #000; font-size: 14px; }
+        #gauge-text { position: absolute; width: 100%; text-align: center; color: white; line-height: 30px; font-weight: bold; text-shadow: 1px 1px 2px #000; font-size: 14px; pointer-events: none; }
 
-        #msg-popup { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 20px; border-radius: 15px; font-weight: bold; display: none; z-index: 1000; text-align: center; white-space: pre-line; border: 2px solid gold; width: 70%; pointer-events: none; }
+        #msg-popup { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); background: rgba(255, 0, 0, 0.8); color: #fff; padding: 20px; border-radius: 15px; font-weight: bold; display: none; z-index: 1000; text-align: center; white-space: pre-line; border: 2px solid #fff; width: 70%; pointer-events: none; box-shadow: 0 0 15px rgba(255,0,0,0.5); }
         
-        canvas { display: block; }
+        #ready-sign {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            color: #4caf50; font-size: 24px; font-weight: bold; 
+            text-shadow: 0 0 10px #000;
+            display: none; pointer-events: none; z-index: 15;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        canvas { display: block; z-index: 1; }
     </style>
 </head>
 <body>
 
+<div id="ready-sign">READY! (꾹 누르세요)</div>
+
 <div id="selection-screen">
-    <h2 style="margin-bottom: 20px;">🏙️ Infinite City Run</h2>
-    <div class="shoe-option" onclick="selectShoe('sneakers')">
-        <strong>👟 운동화</strong><br>
-        <span style="font-size:12px; color:#aaa;">내구도: 500 (표준)</span>
-    </div>
-    <div class="shoe-option" onclick="selectShoe('slipper')">
-        <strong>🩴 슬리퍼</strong><br>
-        <span style="font-size:12px; color:#aaa;">내구도: 250 (약함)</span>
-    </div>
-    <div class="shoe-option" onclick="selectShoe('leather')">
-        <strong>👞 정장 구두</strong><br>
-        <span style="font-size:12px; color:#aaa;">내구도: 1000 (튼튼)</span>
-    </div>
-    <div class="shoe-option" onclick="selectShoe('boots')">
-        <strong>👢 롱 부츠</strong><br>
-        <span style="font-size:12px; color:#aaa;">내구도: 750 (탄력)</span>
-    </div>
+    <h2 style="margin-bottom: 20px;">👟 SHOES AWAY!</h2>
+    <div class="shoe-option" onclick="selectShoe('sneakers')"><strong>👟 운동화</strong><br><span style="font-size:12px; color:#aaa;">내구도: 500</span></div>
+    <div class="shoe-option" onclick="selectShoe('slipper')"><strong>🩴 슬리퍼</strong><br><span style="font-size:12px; color:#aaa;">내구도: 250</span></div>
+    <div class="shoe-option" onclick="selectShoe('leather')"><strong>👞 정장 구두</strong><br><span style="font-size:12px; color:#aaa;">내구도: 1000</span></div>
+    <div class="shoe-option" onclick="selectShoe('boots')"><strong>👢 롱 부츠</strong><br><span style="font-size:12px; color:#aaa;">내구도: 750</span></div>
 </div>
 
 <div id="ui">
     <div>🚩 거리: <span id="total-val">0</span>m</div>
     <div>🚀 고도: <span id="height-val">0</span>m</div>
-    <div>🛠️ 내구도: <span id="dur-val">0</span></div>
-    <div style="margin-top:5px; font-size:12px; color:#ffeb3b;" id="terrain-info">지형: 평지</div>
+    <div style="margin-top: 5px;">🛠️ 내구도</div>
+    <div id="hp-container">
+        <div id="hp-fill"></div>
+        <div id="hp-text">1000 / 1000</div>
+    </div>
+    <div style="margin-top:8px; font-size:12px; color:#ffeb3b;" id="terrain-info">지형: 평지</div>
 </div>
 
 <div id="msg-popup">알림</div>
 <div id="gauge-container">
     <div id="gauge"></div>
-    <div id="gauge-text">PRESS & HOLD</div>
+    <div id="gauge-text">화면 꾹 눌러서 던지기!</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -64,11 +91,13 @@
     const gauge = document.getElementById('gauge');
     const gaugeText = document.getElementById('gauge-text');
     const popup = document.getElementById('msg-popup');
-    
+    const readySign = document.getElementById('ready-sign');
+    const hpFill = document.getElementById('hp-fill');
+    const hpText = document.getElementById('hp-text');
+
     const ui = {
         total: document.getElementById('total-val'),
         height: document.getElementById('height-val'),
-        dur: document.getElementById('dur-val'),
         terrain: document.getElementById('terrain-info')
     };
 
@@ -80,93 +109,65 @@
     let shoe = { x: 100, y: 0, vx: 0, vy: 0, rotation: 0, startX: 100, lastSafeX: 100, lastSafeY: 0 };
     let shoeData = { name: "", color: "", weight: 1, maxDur: 1000, curDur: 1000 };
     
-    // 지형과 빌딩을 따로 관리
     let terrainSegments = [];
     let buildings = []; 
-    let camera = { x: 0, y: 0 };
+    let camera = { x: 0, y: 0, zoom: 1, targetZoom: 1 };
     let bgStars = [];
     
-    // 배경 패럴랙스 속도 (작을수록 느리게 움직임 = 멀리 있는 효과)
     const PARALLAX_FACTOR = 0.2; 
-    
-    // 별 생성
+    const GROUND_BASELINE = canvas.height * 0.8; 
+    let isTouchActive = false;
+
+    window.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); return false; };
+
     for(let i=0; i<200; i++) {
-        bgStars.push({
-            x: Math.random() * window.innerWidth, 
-            y: Math.random() * window.innerHeight, 
-            s: Math.random() * 2,
-            blink: Math.random()
-        });
+        bgStars.push({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, s: Math.random() * 2, blink: Math.random() });
     }
 
     function selectShoe(type) {
         if(type === 'sneakers') shoeData = { name: "운동화", color: "#d32f2f", weight: 1.0, maxDur: 500 };
         else if(type === 'slipper') shoeData = { name: "슬리퍼", color: "#eee", weight: 0.7, maxDur: 250 };
-        else if(type === 'leather') shoeData = { name: "정장구두", color: "#000", weight: 1.5, maxDur: 1000 };
-        else if(type === 'boots') shoeData = { name: "롱부츠", color: "#5d4037", weight: 1.3, maxDur: 750 };
+        else if(type === 'leather') shoeData = { name: "정장구두", color: "#111", weight: 1.5, maxDur: 1000 };
+        else if(type === 'boots') shoeData = { name: "롱부츠", color: "#3e2723", weight: 1.3, maxDur: 750 };
 
         shoeData.curDur = shoeData.maxDur;
         
         generateTerrain(0, 2000);
-        // 초기 빌딩 생성 (화면보다 훨씬 넓게 생성)
         generateBuildings(-1000, window.innerWidth * 2);
 
-        shoe.y = getTerrainHeight(shoe.x) - 20;
+        shoe.y = GROUND_BASELINE - 20;
         shoe.lastSafeY = shoe.y;
 
         document.getElementById('selection-screen').style.display = 'none';
         document.getElementById('ui').style.display = 'block';
         document.getElementById('gauge-container').style.display = 'block';
+        
         updateUI();
         state.started = true;
         loop();
     }
 
-    // --- 빌딩 생성 (패럴랙스 좌표계 기준) ---
     function generateBuildings(startX, endX) {
         let x = startX;
-        
-        // 이미 생성된 마지막 빌딩 뒤에서 시작
         if(buildings.length > 0) {
             let lastB = buildings[buildings.length-1];
-            // 마지막 빌딩 위치가 목표 지점보다 멀면 생성 안 함
             if(lastB.x > endX) return;
             x = lastB.x + lastB.w - 5; 
         }
-
         while(x < endX) {
-            let w = 100 + Math.random() * 200; // 건물 폭
-            let h = 400 + Math.random() * 800; // 건물 높이 (아주 높게)
-            
-            // 색상 랜덤 (회색톤)
+            let w = 100 + Math.random() * 200; 
+            let h = 400 + Math.random() * 800; 
             let colorVal = 30 + Math.random() * 30; 
             let color = `rgb(${colorVal}, ${colorVal}, ${colorVal + 20})`; 
-
-            // 창문 데이터
             let windows = [];
             let rows = Math.floor(h / 40);
             let cols = Math.floor(w / 25);
             for(let r=1; r<rows; r++) {
                 for(let c=1; c<cols-1; c++) {
-                    if(Math.random() > 0.5) {
-                        windows.push({
-                            x: c * 25, y: r * 40,
-                            light: Math.random() > 0.4 
-                        });
-                    }
+                    if(Math.random() > 0.5) windows.push({ x: c * 25, y: r * 40, light: Math.random() > 0.4 });
                 }
             }
-
-            // 건물의 Y위치는 화면 바닥보다 훨씬 아래에서 시작해서 위로 솟게 설정
-            buildings.push({ 
-                x: x, 
-                y: canvas.height + 400, // 기준점
-                w: w, 
-                h: h, 
-                color: color, 
-                windows: windows 
-            });
-            
+            buildings.push({ x: x, y: canvas.height + 400, w: w, h: h, color: color, windows: windows });
             x += w + Math.random() * 20 - 10; 
         }
     }
@@ -174,46 +175,41 @@
     function generateTerrain(startX, endX) {
         let x = startX;
         if(terrainSegments.length === 0) {
-            terrainSegments.push({ x: 0, y: canvas.height * 0.8, type: 'grass' });
+            terrainSegments.push({ x: 0, y: GROUND_BASELINE, type: 'grass' });
             x = 500;
         } else {
             x = terrainSegments[terrainSegments.length-1].x;
         }
-
         while(x < endX) {
             let prevY = terrainSegments[terrainSegments.length-1].y;
             let width = 200 + Math.random() * 300;
             let type = 'grass';
             let newY = prevY;
-
             let rand = Math.random();
-            if (rand < 0.15) { 
-                type = 'gap'; width = 200 + Math.random() * 200; 
-            } else if (rand < 0.45) {
-                newY = prevY - (Math.random() * 150 + 50); type = 'rock'; 
-            } else if (rand < 0.75) {
-                newY = prevY + (Math.random() * 150 + 50); type = 'grass'; 
-            }
-
-            if (newY > canvas.height + 400) newY = canvas.height;
-            if (newY < -3000) newY = -2500;
+            if (rand < 0.15) { type = 'gap'; width = 200 + Math.random() * 200; } 
+            else if (rand < 0.45) { newY = prevY - (Math.random() * 100 + 30); type = 'rock'; } // 변동폭 감소
+            else if (rand < 0.75) { newY = prevY + (Math.random() * 100 + 30); type = 'grass'; } // 변동폭 감소
+            
+            // 높이 제한 (Clamp)
+            if (newY < canvas.height * 0.4) { newY = canvas.height * 0.4 + (Math.random() * 50); type = 'grass'; }
+            if (newY > canvas.height * 0.9) { newY = canvas.height * 0.9 - (Math.random() * 50); }
 
             x += width;
             terrainSegments.push({ x: x, y: newY, type: type });
         }
     }
 
-    function getTerrainHeight(x) {
+    function getPhysicsGroundHeight(x) {
         for(let i=0; i<terrainSegments.length-1; i++) {
             let p1 = terrainSegments[i];
             let p2 = terrainSegments[i+1];
             if(x >= p1.x && x < p2.x) {
-                if(p1.type === 'gap') return 99999;
+                if(p1.type === 'gap') return 99999; 
                 let t = (x - p1.x) / (p2.x - p1.x);
                 return p1.y + t * (p2.y - p1.y);
             }
         }
-        return canvas.height * 0.8;
+        return GROUND_BASELINE;
     }
 
     function getTerrainType(x) {
@@ -221,6 +217,22 @@
             if(x >= terrainSegments[i].x && x < terrainSegments[i+1].x) return terrainSegments[i].type;
         }
         return 'grass';
+    }
+
+    function findSafeRespawnPoint(x) {
+        let currentIndex = 0;
+        for(let i=0; i<terrainSegments.length-1; i++) {
+            if(x >= terrainSegments[i].x && x < terrainSegments[i+1].x) {
+                currentIndex = i;
+                break;
+            }
+        }
+        for(let i = currentIndex; i >= 0; i--) {
+            if(terrainSegments[i].type !== 'gap') {
+                return terrainSegments[i].x + 100;
+            }
+        }
+        return 100; 
     }
 
     function loop() {
@@ -231,123 +243,166 @@
     }
 
     function update() {
-        // 카메라 이동
-        let targetCamX = shoe.x - canvas.width * 0.2;
-        let targetCamY = shoe.y - canvas.height * 0.6;
-        if(targetCamY > 300) targetCamY = 300; 
-        
-        camera.x += (targetCamX - camera.x) * 0.1;
-        camera.y += (targetCamY - camera.y) * 0.1;
+        if(state.resetting) return;
 
-        // 지형 무한 생성 (신발 위치 기준)
+        let groundH = getPhysicsGroundHeight(shoe.x);
+        let visualGroundH = (groundH > 10000) ? GROUND_BASELINE : groundH;
+
+        let dist = Math.abs(shoe.y - visualGroundH);
+        let requiredHeight = dist + 600;
+        let calculatedZoom = canvas.height / requiredHeight;
+        
+        let targetZoom = Math.min(1.0, Math.max(0.35, calculatedZoom));
+        let targetCamY;
+
+        if(shoe.y > GROUND_BASELINE + 100) {
+            targetCamY = GROUND_BASELINE - canvas.height * 0.5;
+            targetZoom = 1.0; 
+        } else {
+            let midPointY = (shoe.y + visualGroundH) / 2;
+            if(shoe.y < visualGroundH - 1000) targetCamY = shoe.y + (canvas.height * 0.2 / camera.zoom);
+            else targetCamY = midPointY;
+            targetCamY -= (canvas.height / 2) / camera.zoom;
+        }
+
+        camera.targetZoom = targetZoom;
+        camera.zoom += (camera.targetZoom - camera.zoom) * 0.005;
+        let targetCamX = shoe.x - (canvas.width * 0.3) / camera.zoom;
+
+        camera.x += (targetCamX - camera.x) * 0.05;
+        if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
+
         if(shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
             generateTerrain(terrainSegments[terrainSegments.length-1].x, shoe.x + 4000);
         }
-
-        // [중요] 빌딩 무한 생성 (패럴랙스 카메라 기준)
-        // 배경 카메라는 실제 카메라보다 느리게 움직임 (PARALLAX_FACTOR)
-        // 따라서 생성 기준점도 그에 맞춰 계산해야 함
         let bgCameraX = camera.x * PARALLAX_FACTOR;
-        let bgGenerationLimit = bgCameraX + window.innerWidth * 2; // 화면 오른쪽보다 더 멀리까지 생성
-        
-        generateBuildings(0, bgGenerationLimit); // 시작점은 무시되고 마지막 건물 뒤에 붙음
-        
-        // 화면 왼쪽으로 완전히 벗어난 빌딩 제거 (메모리 관리)
-        if(buildings.length > 0) {
-            // 빌딩의 오른쪽 끝(x+w)이 배경 카메라의 왼쪽 끝보다 작으면 삭제
-            if(buildings[0].x + buildings[0].w < bgCameraX - 500) {
-                buildings.shift();
-            }
-        }
+        let bgGenerationLimit = bgCameraX + window.innerWidth * 3; 
+        generateBuildings(0, bgGenerationLimit); 
+        if(buildings.length > 0 && buildings[0].x + buildings[0].w < bgCameraX - 1000) buildings.shift();
 
         if (!state.flying) {
+            readySign.style.display = 'block'; 
             if(!state.resetting) {
                 physics.angle += 2.5 * physics.angleDir;
                 if(physics.angle > -15 || physics.angle < -75) physics.angleDir *= -1;
                 
                 if (state.charging) {
+                    readySign.style.display = 'none'; 
                     physics.power += 1.5 * physics.powerDir; 
                     if(physics.power >= 100 || physics.power <= 0) physics.powerDir *= -1;
-                    
                     gauge.style.width = physics.power + "%";
-                    gaugeText.innerText = Math.floor(physics.power) + "%";
                 } else {
                     gauge.style.width = "0%";
-                    gaugeText.innerText = "꾹 눌러서 던지기!";
                 }
             }
         } else {
+            readySign.style.display = 'none';
             shoe.vx *= 0.995;
             shoe.vy += physics.gravity;
             shoe.x += shoe.vx;
             shoe.y += shoe.vy;
             shoe.rotation += shoe.vx * 0.1;
 
-            let groundH = getTerrainHeight(shoe.x);
-            let terrainType = getTerrainType(shoe.x);
+            if(Math.abs(shoe.vx) < 0.1 && Math.abs(shoe.vy) < 0.1 && groundH < 10000 && shoe.y >= groundH - 12) {
+                shoe.vx = 0; shoe.vy = 0; 
+                shoe.y = groundH - 4; 
+                shoe.rotation = 0;
+                
+                state.flying = false;
+                state.charging = false; 
+                shoe.lastSafeX = shoe.x; shoe.lastSafeY = shoe.y; shoe.startX = shoe.x;
+            }
 
-            let altitude = Math.floor((groundH - shoe.y)/10);
-            if(groundH > 10000) altitude = "추락중";
-            ui.height.innerText = altitude;
+            let terrainType = getTerrainType(shoe.x);
+            let currentAlt = Math.floor((GROUND_BASELINE - shoe.y) / 10);
+            let currentDist = Math.floor(shoe.x / 10);
+            ui.total.innerText = currentDist; 
+            if (currentAlt < -50) ui.height.innerText = "⚠️ 추락중"; 
+            else ui.height.innerText = Math.max(0, currentAlt);
             ui.terrain.innerText = "지형: " + (terrainType==='gap'?"☠️ 절벽":(terrainType==='rock'?"🪨 공사장":"🛣️ 도로"));
 
-            if (shoe.y >= groundH - 10 && terrainType !== 'gap') {
+            if (terrainType !== 'gap' && shoe.y > groundH + 20) {
+                shoe.vx = -shoe.vx * 0.6; 
+                shoe.x += shoe.vx * 2; 
+                applyDamage(5);
+            }
+            else if (shoe.y >= groundH - 10 && terrainType !== 'gap') {
                 handleCollision(groundH, terrainType);
             } 
-            else if (shoe.y > groundH + 800 && terrainType === 'gap') {
+            else if (shoe.y > GROUND_BASELINE + 2000 && terrainType === 'gap') {
                 handlePitFall();
             }
         }
     }
 
     function handleCollision(groundH, type) {
-        shoe.y = groundH - 10;
-        shoe.vx = 0;
-        shoe.vy = 0;
-        state.flying = false;
-
-        let impactDmg = 10 + Math.random() * 15; 
-        if(type === 'rock') impactDmg *= 2.0; 
-
+        shoe.y = groundH - 4;
+        shoe.vx = 0; shoe.vy = 0; 
+        shoe.rotation = 0; 
+        
+        state.flying = false; 
+        state.charging = false; 
+        physics.power = 0;
+        gauge.style.width = "0%";
+        
+        let impactDmg = 5; 
+        if(type === 'rock') impactDmg = 20; 
         applyDamage(impactDmg);
 
         shoe.lastSafeX = shoe.x;
         shoe.lastSafeY = shoe.y;
         shoe.startX = shoe.x;
-        ui.total.innerText = Math.floor(shoe.x / 10);
     }
 
     function handlePitFall() {
+        if(state.resetting) return;
+        state.resetting = true; 
+        
         state.flying = false;
+        state.charging = false; 
+        physics.power = 0;
+        gauge.style.width = "0%";
         shoe.vx = 0; shoe.vy = 0;
-        applyDamage(50); 
-        showPopup("😱 으악! 빌딩 사이로 추락!\n내구도 -50\n직전 위치로 복귀");
-        state.resetting = true;
-        setTimeout(() => {
-            shoe.x = shoe.lastSafeX;
-            shoe.y = shoe.lastSafeY - 50;
-            camera.x = shoe.x - canvas.width * 0.2;
-            camera.y = shoe.y - canvas.height * 0.5;
-            state.resetting = false;
-            popup.style.display = 'none';
-        }, 1200);
+        
+        applyDamage(50);
+        
+        if (shoeData.curDur > 0) {
+            showPopup("😱 으악! 떨어졌다!\n내구도 -50");
+            setTimeout(() => {
+                shoe.x = shoe.lastSafeX;
+                shoe.y = getPhysicsGroundHeight(shoe.lastSafeX) - 100;
+                camera.x = shoe.x - canvas.width * 0.2;
+                camera.y = shoe.y - canvas.height * 0.5;
+                state.resetting = false;
+                popup.style.display = 'none';
+            }, 1500);
+        }
     }
 
     function applyDamage(amount) {
         shoeData.curDur -= amount;
         if(shoeData.curDur < 0) shoeData.curDur = 0;
         updateUI();
-
+        
         if(shoeData.curDur <= 0) {
             showPopup(`💥 ${shoeData.name} 파손됨!\n\n🚩 최종 거리: ${Math.floor(shoe.x/10)}m`);
+            state.resetting = true; 
             setTimeout(() => location.reload(), 3000);
         }
     }
 
     function updateUI() {
-        ui.dur.innerText = Math.floor(shoeData.curDur) + " / " + shoeData.maxDur;
-        let ratio = shoeData.curDur / shoeData.maxDur;
-        ui.dur.style.color = ratio < 0.2 ? '#ff3d00' : '#fff';
+        let percent = (shoeData.curDur / shoeData.maxDur) * 100;
+        hpFill.style.width = percent + "%";
+        
+        if(percent > 50) {
+            hpFill.style.background = "linear-gradient(to right, #4caf50, #81c784)";
+        } else if (percent > 20) {
+            hpFill.style.background = "linear-gradient(to right, #ff9800, #ffb74d)";
+        } else {
+            hpFill.style.background = "linear-gradient(to right, #f44336, #e57373)";
+        }
+        hpText.innerText = Math.floor(shoeData.curDur) + " / " + shoeData.maxDur;
     }
 
     function showPopup(text) {
@@ -356,14 +411,12 @@
     }
 
     function getSkyColor() {
-        const cycleLen = 25000; 
+        const cycleLen = 40000; 
         let progress = (shoe.x % cycleLen) / cycleLen;
-
         const day = { t: "#87CEEB", b: "#E0F7FA" };
         const sunset = { t: "#4a148c", b: "#ff6f00" }; 
         const night = { t: "#000000", b: "#0d47a1" }; 
         const dawn = { t: "#4527a0", b: "#f8bbd0" };
-
         if(progress < 0.4) return [day.t, day.b, 0];
         else if (progress < 0.55) return [sunset.t, sunset.b, 0];
         else if (progress < 0.85) return [night.t, night.b, 1];
@@ -372,52 +425,41 @@
 
     function draw() {
         const [topColor, botColor, starAlpha] = getSkyColor();
-
-        // 1. 하늘
         let skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
         skyGradient.addColorStop(0, topColor);
         skyGradient.addColorStop(1, botColor);
         ctx.fillStyle = skyGradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // 2. 별 (밤에만)
         if(starAlpha > 0) {
             ctx.save();
             ctx.fillStyle = "#fff";
-            // 별도 패럴랙스 적용 (아주아주 느리게)
             let starParallax = camera.x * 0.05;
-            
             bgStars.forEach(s => {
                 let opacity = starAlpha * (0.5 + Math.sin(Date.now() * 0.005 + s.blink) * 0.5); 
-                // 화면 안에서 반복되도록 모듈러 연산
                 let sx = (s.x - starParallax) % window.innerWidth;
                 if(sx < 0) sx += window.innerWidth;
-                
-                let sy = s.y; // Y축은 고정
-                
+                let sy = s.y; 
                 ctx.globalAlpha = opacity;
                 ctx.beginPath(); ctx.arc(sx, sy, s.s, 0, Math.PI*2); ctx.fill();
             });
             ctx.restore();
         }
 
-        // 3. 빌딩 (패럴랙스 레이어)
         ctx.save();
-        // X축: 카메라 속도의 20%로 이동 (멀리 있는 효과)
-        // Y축: 카메라 속도의 10%로 이동 (살짝만 움직임)
-        ctx.translate(-(camera.x * PARALLAX_FACTOR), -(camera.y * 0.1));
-        
-        buildings.forEach(b => {
-            // 빌딩 그리기 (절대 좌표 b.x, b.y 사용)
-            // 화면 밖 최적화는 캔버스가 알아서 처리하지만, 루프가 많아지면 위에서 처리한 buildings.shift가 도움됨
-            
-            let renderY = b.y - b.h; // 바닥 기준 높이 적용
-            
-            ctx.fillStyle = b.color;
-            ctx.fillRect(b.x, renderY, b.w, b.h + 2000); // 땅 밑으로 길게
+        ctx.scale(camera.zoom, camera.zoom);
+        ctx.translate(-camera.x, -camera.y);
 
+        ctx.save();
+        let parallaxOffsetX = camera.x * (1 - PARALLAX_FACTOR);
+        let parallaxOffsetY = camera.y * 0.1; 
+        ctx.translate(parallaxOffsetX, parallaxOffsetY);
+
+        buildings.forEach(b => {
+            let renderY = b.y - b.h; 
+            ctx.fillStyle = b.color;
+            ctx.fillRect(b.x, renderY, b.w, b.h + 2000); 
             b.windows.forEach(w => {
-                // 창문 높이가 너무 낮으면(땅속) 그리지 않음
                 if(renderY + w.y < b.y + 500) {
                      if(starAlpha > 0.5 && w.light) {
                         ctx.fillStyle = "rgba(255, 235, 59, 0.9)";
@@ -433,16 +475,26 @@
         });
         ctx.restore();
 
-        // 4. 지형 및 신발 (메인 레이어)
-        ctx.save();
-        ctx.translate(-camera.x, -camera.y);
+        // [렌더링 최적화] 화면에 보이는 영역 + 여유분만 그리기
+        let viewStart = camera.x - (canvas.width * 1.5) / camera.zoom;
+        let viewEnd = camera.x + (canvas.width * 1.5) / camera.zoom;
 
-        // 지형 그리기
         ctx.beginPath();
-        if(terrainSegments.length > 0) {
-            ctx.moveTo(terrainSegments[0].x, terrainSegments[0].y);
-            for(let i=0; i<terrainSegments.length-1; i++) {
-                let p1 = terrainSegments[i];
+        let started = false;
+
+        for(let i=0; i<terrainSegments.length; i++) {
+            let p1 = terrainSegments[i];
+            
+            // 화면 밖이면 건너뛰기 (Culling)
+            if (p1.x < viewStart && i < terrainSegments.length - 1 && terrainSegments[i+1].x < viewStart) continue;
+            if (p1.x > viewEnd) break;
+
+            if (!started) {
+                ctx.moveTo(p1.x, p1.y);
+                started = true;
+            }
+
+            if(i < terrainSegments.length - 1) {
                 let p2 = terrainSegments[i+1];
                 if(p1.type === 'gap') {
                     ctx.lineTo(p1.x, canvas.height + 3000); 
@@ -453,17 +505,65 @@
                 }
             }
         }
-        ctx.lineTo(terrainSegments[terrainSegments.length-1].x, canvas.height + 3000);
-        ctx.lineTo(terrainSegments[0].x, canvas.height + 3000);
-        ctx.closePath();
         
+        // 닫힌 도형 처리를 위해 마지막 점 처리
+        if (started) {
+             // 끝부분 처리 (필요시)
+        }
+
+        // 지형 색상 채우기 등... (최적화를 위해 stroke/fill을 나누지 않고 drawTerrain 함수로 통합 가능하지만
+        // 여기서는 기존 로직 유지하되 범위만 제한)
+        
+        // * 위 로직은 fill을 위해 닫힌 도형이 필요하므로, 기존 방식대로 하되 범위 제한을 적용
+        // 간단하게 stroke만 다시 그리는 방식으로 수정
+        
+        ctx.closePath(); // (채우기는 복잡하므로 여기선 간단히)
+        // [수정된 그리기 로직]
+        // fill을 제대로 하려면 화면 바닥까지 닫아야 함.
+        // 여기서는 stroke 위주로 최적화 보여줌.
+        
+        // 다시: fill을 위한 전체 경로 (최적화 버전)
+        ctx.beginPath();
+        started = false;
+        let lastX = 0;
+        
+        for(let i=0; i<terrainSegments.length; i++) {
+            let p1 = terrainSegments[i];
+            if (p1.x < viewStart && i < terrainSegments.length - 1 && terrainSegments[i+1].x < viewStart) continue;
+            if (p1.x > viewEnd) break;
+
+            if (!started) {
+                ctx.moveTo(p1.x, canvas.height + 3000); // 바닥에서 시작
+                ctx.lineTo(p1.x, p1.y);
+                started = true;
+            }
+            
+            if(i < terrainSegments.length - 1) {
+                let p2 = terrainSegments[i+1];
+                if(p1.type === 'gap') {
+                    ctx.lineTo(p1.x, canvas.height + 3000); 
+                    ctx.lineTo(p2.x, canvas.height + 3000);
+                    ctx.lineTo(p2.x, p2.y);
+                } else {
+                    ctx.lineTo(p2.x, p2.y);
+                }
+                lastX = p2.x;
+            }
+        }
+        ctx.lineTo(lastX, canvas.height + 3000); // 마지막 바닥 연결
+        ctx.closePath();
         ctx.fillStyle = starAlpha > 0.5 ? "#263238" : "#546E7A"; 
         ctx.fill();
         
+        // 선 그리기 (Stroke)
         ctx.lineWidth = 4;
         for(let i=0; i<terrainSegments.length-1; i++) {
             let p1 = terrainSegments[i];
             let p2 = terrainSegments[i+1];
+            
+            if (p2.x < viewStart) continue;
+            if (p1.x > viewEnd) break;
+
             if(p1.type !== 'gap') {
                 ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
                 ctx.strokeStyle = p1.type === 'rock' ? "#3E2723" : (starAlpha > 0.5 ? "#102027" : "#37474F");
@@ -471,17 +571,17 @@
             }
         }
 
-        // 신발 그리기
         if(!state.resetting) {
             ctx.save();
             ctx.translate(shoe.x, shoe.y);
-            
-            if(state.charging) {
-                ctx.translate(Math.random()*2 - 1, Math.random()*2 - 1);
-            }
-            
+            let shoeVisualScale = (1 / camera.zoom) * 0.7;
+            shoeVisualScale = Math.max(1, shoeVisualScale);
+            ctx.scale(shoeVisualScale, shoeVisualScale);
+            if(state.charging) ctx.translate(Math.random()*2 - 1, Math.random()*2 - 1);
             ctx.rotate(shoe.rotation);
             ctx.fillStyle = shoeData.color;
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#ffffff"; 
             ctx.beginPath();
             if(shoeData.name === "롱부츠") {
                 ctx.rect(-15, -10, 30, 15); ctx.rect(5, -30, 10, 30);
@@ -492,15 +592,16 @@
                 if(shoeData.name==="정장구두") { ctx.fillStyle="#000"; ctx.fillRect(-15,-5,30,5); }
             }
             ctx.fill();
+            ctx.stroke();
             ctx.restore();
         }
 
-        // 화살표
         if (!state.flying && !state.resetting && state.started) {
             ctx.save();
             ctx.translate(shoe.x, shoe.y);
+            let arrowScale = Math.max(1, (1/camera.zoom) * 0.7);
+            ctx.scale(arrowScale, arrowScale);
             ctx.rotate(physics.angle * Math.PI/180);
-            
             let arrowLen = 50 + physics.power;
             ctx.strokeStyle = `rgb(${255}, ${255-physics.power*2.5}, 0)`;
             ctx.lineWidth = 3;
@@ -511,34 +612,53 @@
         ctx.restore();
     }
 
-    function handleStart(e) {
+    function startCharge(e) {
+        if(e.cancelable) e.preventDefault(); 
         if(e.target.className.includes('shoe-option')) return;
         if(!state.started || state.flying || state.resetting) return;
-        if(e.cancelable) e.preventDefault(); 
         state.charging = true;
     }
 
-    function handleEnd(e) {
+    function endCharge(e) {
         if(!state.started) return;
         if(state.charging) {
             state.charging = false;
-            
             let force = (physics.power * 0.4 + 12) / shoeData.weight;
             let rad = physics.angle * Math.PI / 180;
             shoe.vx = Math.cos(rad) * force;
             shoe.vy = Math.sin(rad) * force;
-            
             physics.power = 0;
             gauge.style.width = "0%";
+            gaugeText.innerText = "화면 꾹 눌러서 던지기!";
             ui.terrain.innerText = "비행중...";
             state.flying = true;
         }
     }
 
-    document.addEventListener('mousedown', handleStart);
-    document.addEventListener('touchstart', handleStart, {passive: false});
-    document.addEventListener('mouseup', handleEnd);
-    document.addEventListener('touchend', handleEnd);
+    document.addEventListener('mousedown', (e) => {
+        if(isTouchActive) return; 
+        startCharge(e);
+    });
+    
+    document.addEventListener('mouseup', (e) => {
+        if(isTouchActive) return;
+        endCharge(e);
+    });
+
+    document.addEventListener('touchstart', (e) => {
+        isTouchActive = true; 
+        startCharge(e);
+    }, {passive: false}); 
+
+    document.addEventListener('touchend', (e) => {
+        endCharge(e);
+        setTimeout(() => isTouchActive = false, 500);
+    });
+    
+    document.addEventListener('touchcancel', (e) => {
+        endCharge(e);
+        isTouchActive = false;
+    });
 
 </script>
 </body>
