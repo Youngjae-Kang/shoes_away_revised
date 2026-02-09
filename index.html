@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Respawn Fix</title>
+    <title>신발 던지기: Forward Rescue</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
@@ -233,17 +233,29 @@
         return 'grass';
     }
 
-    // [최적화된 안전지대 검색] 배열 역순 탐색 (While 루프 제거)
-    function findSafeRespawnPoint(startX) {
-        // 현재 위치에서 가장 가까운 뒤쪽 땅을 배열 인덱스로 찾음 (즉시 반환)
-        for (let i = terrainSegments.length - 1; i >= 0; i--) {
+    // [New] 전방 안전지대 검색 (바로 앞 지형으로 구조)
+    function findForwardSafeRespawnPoint(startX) {
+        // 배열 처음부터 끝까지 훑되, 내 위치(startX)보다 앞에 있는 첫 번째 땅을 찾음
+        for (let i = 0; i < terrainSegments.length; i++) {
             let seg = terrainSegments[i];
-            // 내 위치보다 뒤에 있고 + Gap이 아닌 땅
-            if (seg.x < startX && seg.type !== 'gap') {
-                return seg.x + 50; // 그 땅의 시작점으로 복귀
+            if (seg.x > startX && seg.type !== 'gap') {
+                return seg.x + 50; // 찾은 땅의 앞부분에 착지
             }
         }
-        return 100; // 못 찾으면 초기 위치
+        
+        // 만약 앞쪽 땅이 생성 안 됐으면(거의 없겠지만), 그냥 뒤쪽 검색으로 대체
+        return findSafeRespawnPointBack(startX);
+    }
+
+    // (혹시 몰라 남겨두는) 후방 검색 (Fallback용)
+    function findSafeRespawnPointBack(startX) {
+        let safeX = startX - 200; 
+        while (safeX > 0) {
+            let type = getTerrainType(safeX);
+            if (type !== 'gap') return safeX;
+            safeX -= 200;
+        }
+        return 100;
     }
 
     function loop() {
@@ -287,8 +299,7 @@
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
 
-        // [중요] 메모리 정리 기능 제거 (무한 맵 유지하여 안전지대 보존)
-        
+        // 지형 생성 (계속)
         if(terrainSegments.length > 0 && shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
             generateTerrain(terrainSegments[terrainSegments.length-1].x, shoe.x + 4000);
         }
@@ -325,7 +336,7 @@
                 shoe.rotation = 0;
                 state.flying = false;
                 state.charging = false; 
-                shoe.lastSafeX = shoe.x; 
+                // 안전지대 저장 로직은 제거 (이제 떨어질 때 실시간으로 앞을 찾음)
                 shoe.startX = shoe.x;
             }
 
@@ -362,7 +373,6 @@
         if(type === 'rock') impactDmg = 20; 
         applyDamage(impactDmg);
 
-        shoe.lastSafeX = shoe.x;
         shoe.startX = shoe.x;
     }
 
@@ -379,21 +389,19 @@
         applyDamage(50, true);
         
         if (shoeData.curDur > 0) {
-            showPopup(`😱 절벽 추락!\n내구도 -50`);
+            showPopup(`😱 전방으로 구조 중...\n내구도 -50`);
             
-            // 스마트 안전지대 검색
-            let safeX = findSafeRespawnPoint(shoe.lastSafeX);
+            // [핵심 변경] 현재 위치보다 '앞쪽(Forward)'에 있는 안전지대 검색
+            let safeX = findForwardSafeRespawnPoint(shoe.x);
             
             setTimeout(() => {
                 shoe.x = safeX;
-                // 땅 높이 계산해서 위로 안착
-                shoe.y = getPhysicsGroundHeight(safeX) - 50;
-                shoe.vx = 0; shoe.vy = 0;
+                shoe.y = getPhysicsGroundHeight(safeX) - 100;
+                shoe.vx = 0; 
+                shoe.vy = 0;
                 
-                // 카메라 강제 이동
                 camera.x = shoe.x - canvas.width * 0.2;
                 camera.y = shoe.y - canvas.height * 0.5;
-                
                 state.resetting = false;
                 popup.style.display = 'none';
             }, 1000);
@@ -402,7 +410,6 @@
 
     function applyDamage(amount, force = false) {
         if (!force && Date.now() - lastHitTime < 1000) return;
-        
         lastHitTime = Date.now();
         
         shoeData.curDur -= amount;
