@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Wide View</title>
+    <title>SHOES AWAY!/title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
@@ -12,7 +12,7 @@
             touch-action: none; 
             user-select: none; -webkit-user-select: none; 
             -webkit-touch-callout: none;
-            height: 100%; width: 100%; position: fixed;
+            height: 100%; width: 100%;
         }
         
         #ui { position: absolute; top: 15px; left: 15px; z-index: 20; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; display: none; font-size: 15px; font-weight: bold; width: 200px; }
@@ -60,7 +60,7 @@
 <div id="ready-sign">READY! (꾹 누르세요)</div>
 
 <div id="selection-screen">
-    <h2 style="margin-bottom: 20px;">👟 신발 던지기 (와이드 뷰)</h2>
+    <h2 style="margin-bottom: 20px;">👟 신발 던지기</h2>
     <div class="shoe-option" onclick="selectShoe('sneakers')"><strong>👟 운동화</strong><br><span style="font-size:12px; color:#aaa;">내구도: 500</span></div>
     <div class="shoe-option" onclick="selectShoe('slipper')"><strong>🩴 슬리퍼</strong><br><span style="font-size:12px; color:#aaa;">내구도: 250</span></div>
     <div class="shoe-option" onclick="selectShoe('leather')"><strong>👞 정장 구두</strong><br><span style="font-size:12px; color:#aaa;">내구도: 1000</span></div>
@@ -242,13 +242,9 @@
         let visualGroundH = (groundH > 10000) ? GROUND_BASELINE : groundH;
 
         let dist = Math.abs(shoe.y - visualGroundH);
-        
-        // [줌 아웃 수정] 기본 뷰를 훨씬 넓게 잡음 (900 -> 1100)
         let requiredHeight = dist + 1100; 
         let calculatedZoom = canvas.height / requiredHeight;
         
-        // [모바일 대응] 최소 줌 레벨을 더 낮춰서(0.25) 넓은 시야 확보
-        // 최대 줌도 0.85로 제한하여 너무 답답하게 붙지 않도록 함
         let minZoom = window.innerWidth < 600 ? 0.25 : 0.3;
         let targetZoom = Math.min(0.85, Math.max(minZoom, calculatedZoom));
         
@@ -267,19 +263,30 @@
         camera.targetZoom = targetZoom;
         camera.zoom += (camera.targetZoom - camera.zoom) * 0.005;
         
-        // [시야 확보] 신발을 왼쪽 20% 지점에 둬서 오른쪽(앞)을 더 많이 보여줌
         let targetCamX = shoe.x - (canvas.width * 0.2) / camera.zoom;
 
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
 
-        if(shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
+        // [최적화 1] 화면 밖으로 지나간 지형 제거 (Memory Cleanup)
+        // 카메라보다 3000px 뒤에 있는 지형 데이터는 삭제
+        if (terrainSegments.length > 0 && terrainSegments[0].x < camera.x - 3000) {
+            terrainSegments.shift();
+        }
+        
+        // [최적화 2] 건물도 똑같이 삭제
+        if(buildings.length > 0 && buildings[0].x + buildings[0].w < camera.x * PARALLAX_FACTOR - 1000) {
+            buildings.shift();
+        }
+
+        // 지형 생성 (앞으로 계속 만듦)
+        if(terrainSegments.length > 0 && shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
             generateTerrain(terrainSegments[terrainSegments.length-1].x, shoe.x + 4000);
         }
+        
         let bgCameraX = camera.x * PARALLAX_FACTOR;
         let bgGenerationLimit = bgCameraX + window.innerWidth * 3; 
         generateBuildings(0, bgGenerationLimit); 
-        if(buildings.length > 0 && buildings[0].x + buildings[0].w < bgCameraX - 1000) buildings.shift();
 
         if (!state.flying) {
             readySign.style.display = 'block'; 
@@ -311,7 +318,7 @@
                 
                 state.flying = false;
                 state.charging = false; 
-                shoe.lastSafeX = shoe.x; // 안전 위치 저장
+                shoe.lastSafeX = shoe.x; 
                 shoe.startX = shoe.x;
             }
 
@@ -486,55 +493,80 @@
         });
         ctx.restore();
 
+        // [렌더링 최적화 & 시각 오류 수정]
+        // 화면에 보이는 것만 그리고, 절벽은 '끊어서' 그립니다.
+        
         let viewStart = camera.x - (canvas.width * 1.5) / camera.zoom;
         let viewEnd = camera.x + (canvas.width * 1.5) / camera.zoom;
 
-        ctx.beginPath();
-        let started = false;
-        let lastX = 0;
-        
-        for(let i=0; i<terrainSegments.length; i++) {
-            let p1 = terrainSegments[i];
-            if (p1.x < viewStart && i < terrainSegments.length - 1 && terrainSegments[i+1].x < viewStart) continue;
-            if (p1.x > viewEnd) break;
-
-            if (!started) {
-                ctx.moveTo(p1.x, canvas.height + 3000);
-                ctx.lineTo(p1.x, p1.y);
-                started = true;
-            }
-            
-            if(i < terrainSegments.length - 1) {
-                let p2 = terrainSegments[i+1];
-                if(p1.type === 'gap') {
-                    ctx.lineTo(p1.x, canvas.height + 3000); 
-                    ctx.lineTo(p2.x, canvas.height + 3000);
-                    ctx.lineTo(p2.x, p2.y);
-                } else {
-                    ctx.lineTo(p2.x, p2.y);
-                }
-                lastX = p2.x;
-            }
-        }
-        ctx.lineTo(lastX, canvas.height + 3000);
-        ctx.closePath();
-        ctx.fillStyle = starAlpha > 0.5 ? "#263238" : "#546E7A"; 
-        ctx.fill();
-        
+        ctx.fillStyle = starAlpha > 0.5 ? "#263238" : "#546E7A";
+        ctx.strokeStyle = starAlpha > 0.5 ? "#102027" : "#37474F";
         ctx.lineWidth = 4;
+        
+        let isDrawing = false;
+        let polyStartX = 0;
+
         for(let i=0; i<terrainSegments.length-1; i++) {
             let p1 = terrainSegments[i];
             let p2 = terrainSegments[i+1];
-            
+
+            // 화면 밖이면 그리지 않음 (Culling)
+            if (p2.x < viewStart) continue;
+            if (p1.x > viewEnd) break;
+
+            if (p1.type === 'gap') {
+                // Gap을 만나면 현재 섬을 마감
+                if (isDrawing) {
+                    ctx.lineTo(p1.x, canvas.height + 3000); 
+                    ctx.lineTo(polyStartX, canvas.height + 3000);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 외곽선은 위쪽만 그림
+                    ctx.stroke(); 
+                    isDrawing = false;
+                }
+            } else {
+                if (!isDrawing) {
+                    ctx.beginPath();
+                    // 외곽선만 그리기 위해 moveTo
+                    // (Fill은 별도 패스로 하거나, 복잡하면 Stroke만 그려도 됨. 여기선 둘 다 처리)
+                    ctx.moveTo(p1.x, canvas.height + 3000);
+                    ctx.lineTo(p1.x, p1.y);
+                    polyStartX = p1.x;
+                    isDrawing = true;
+                }
+                ctx.lineTo(p2.x, p2.y);
+            }
+        }
+        
+        if (isDrawing) {
+            // 마지막 섬 마감
+            // 현재 i는 루프 끝났으므로 마지막 세그먼트 찾기
+            // (간단히 처리하기 위해 마지막에 닫음)
+            // 여기서는 루프 안에서 처리하는 게 확실하므로 생략하거나
+            // 현재 path를 닫음
+            ctx.lineTo(terrainSegments[terrainSegments.length-1].x, canvas.height + 3000);
+            ctx.lineTo(polyStartX, canvas.height + 3000);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+        
+        // [Stroke 다시 그리기 - 깔끔하게] 
+        // 위에서 fill과 stroke를 같이 하면 테두리가 이상해질 수 있어서
+        // 땅 윗면만 선으로 다시 그어줌
+        ctx.beginPath();
+        for(let i=0; i<terrainSegments.length-1; i++) {
+            let p1 = terrainSegments[i];
+            let p2 = terrainSegments[i+1];
             if (p2.x < viewStart) continue;
             if (p1.x > viewEnd) break;
 
             if(p1.type !== 'gap') {
-                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-                ctx.strokeStyle = p1.type === 'rock' ? "#3E2723" : (starAlpha > 0.5 ? "#102027" : "#37474F");
-                ctx.stroke();
+                ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
             }
         }
+        ctx.stroke();
 
         if(!state.resetting) {
             ctx.save();
