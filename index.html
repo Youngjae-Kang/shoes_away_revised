@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>신발 던지기: Safe & Stable</title>
+    <title>신발 던지기: Respawn Fix</title>
     <style>
         html, body { 
             margin: 0; padding: 0; background: #000; 
@@ -233,18 +233,17 @@
         return 'grass';
     }
 
-    // [최종 수정] 뒤로 가며 안전한 땅 찾기
+    // [최적화된 안전지대 검색] 배열 역순 탐색 (While 루프 제거)
     function findSafeRespawnPoint(startX) {
-        let safeX = startX - 200; 
-        
-        // 메모리 삭제 기능을 껐으므로, 이제 무조건 처음 시작점(0)까지 검색 가능
-        while (safeX > 0) {
-            let type = getTerrainType(safeX);
-            // Gap이 아니면 안전한 땅으로 간주
-            if (type !== 'gap') return safeX;
-            safeX -= 200; // 계속 뒤로 이동
+        // 현재 위치에서 가장 가까운 뒤쪽 땅을 배열 인덱스로 찾음 (즉시 반환)
+        for (let i = terrainSegments.length - 1; i >= 0; i--) {
+            let seg = terrainSegments[i];
+            // 내 위치보다 뒤에 있고 + Gap이 아닌 땅
+            if (seg.x < startX && seg.type !== 'gap') {
+                return seg.x + 50; // 그 땅의 시작점으로 복귀
+            }
         }
-        return 100; // 정 못 찾으면 시작 지점
+        return 100; // 못 찾으면 초기 위치
     }
 
     function loop() {
@@ -288,7 +287,7 @@
         camera.x += (targetCamX - camera.x) * 0.05;
         if(shoe.y <= GROUND_BASELINE + 100) camera.y += (targetCamY - camera.y) * 0.05;
 
-        // [중요] 메모리 정리(Shift) 기능 삭제! 이제 땅이 절대 사라지지 않음
+        // [중요] 메모리 정리 기능 제거 (무한 맵 유지하여 안전지대 보존)
         
         if(terrainSegments.length > 0 && shoe.x + 2000 > terrainSegments[terrainSegments.length-1].x) {
             generateTerrain(terrainSegments[terrainSegments.length-1].x, shoe.x + 4000);
@@ -377,18 +376,24 @@
         shoe.vx = 0; shoe.vy = 0;
         
         let damage = Math.floor(shoeData.maxDur * 0.1); 
-        applyDamage(50, true); // 데미지 50 고정
+        applyDamage(50, true);
         
         if (shoeData.curDur > 0) {
             showPopup(`😱 절벽 추락!\n내구도 -50`);
             
+            // 스마트 안전지대 검색
+            let safeX = findSafeRespawnPoint(shoe.lastSafeX);
+            
             setTimeout(() => {
-                let safeX = findSafeRespawnPoint(shoe.lastSafeX);
                 shoe.x = safeX;
-                shoe.y = getPhysicsGroundHeight(safeX) - 100;
-                shoe.lastSafeX = safeX; 
+                // 땅 높이 계산해서 위로 안착
+                shoe.y = getPhysicsGroundHeight(safeX) - 50;
+                shoe.vx = 0; shoe.vy = 0;
+                
+                // 카메라 강제 이동
                 camera.x = shoe.x - canvas.width * 0.2;
                 camera.y = shoe.y - canvas.height * 0.5;
+                
                 state.resetting = false;
                 popup.style.display = 'none';
             }, 1000);
